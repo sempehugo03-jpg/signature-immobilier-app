@@ -19,6 +19,7 @@ import {
   saveDiagnostic,
   type Diagnostic,
 } from "@/lib/demo-store";
+import { getIndicativeEstimate } from "@/lib/indicative-estimate";
 
 export const Route = createFileRoute("/diagnostic")({
   head: () => ({
@@ -110,6 +111,8 @@ function Page() {
   }
 
   if (submitted) {
+    const indicativeEstimate = getIndicativeEstimate(data);
+
     return (
       <SiteLayout variant="public">
         <section className="mx-auto max-w-3xl px-5 py-16 md:px-8 md:py-24">
@@ -117,25 +120,41 @@ function Page() {
             <div className="mx-auto grid h-14 w-14 place-items-center rounded-full bg-gold text-gold-foreground">
               <CheckCircle2 className="h-7 w-7" />
             </div>
-            <h1 className="mt-6 font-display text-4xl leading-tight md:text-5xl">
+            <div className="mt-6 text-xs uppercase tracking-[0.25em] text-muted-foreground">
               {agencyConfig.estimation.finalTitle}
+            </div>
+            <h1 className="mt-6 font-display text-4xl leading-tight md:text-5xl">
+              Votre estimation indicative
             </h1>
-            <p className="mx-auto mt-4 max-w-xl text-muted-foreground">
+            <div className="mx-auto mt-6 max-w-xl rounded-2xl border border-border bg-secondary/50 p-5">
+              <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+                Fourchette de prix indicative
+              </div>
+              <div className="mt-2 font-display text-3xl leading-tight text-foreground md:text-4xl">
+                {indicativeEstimate.formattedRange}
+              </div>
+            </div>
+            <p className="mx-auto mt-5 max-w-xl text-muted-foreground">
+              Cette estimation doit être affinée avec un conseiller, après
+              analyse du secteur, de l'état réel du bien, des photos et des
+              références de vente comparables.
+            </p>
+            <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
               {agencyConfig.estimation.finalText}
             </p>
             <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <a
+                href={agencyConfig.contact.phoneHref}
+                className="inline-flex items-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+              >
+                Être rappelé pour affiner l’estimation
+              </a>
               <Link
                 to="/"
                 className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
               >
                 Retour aux biens
               </Link>
-              <a
-                href={agencyConfig.contact.phoneHref}
-                className="inline-flex items-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-              >
-                Appeler l’agence
-              </a>
             </div>
           </div>
         </section>
