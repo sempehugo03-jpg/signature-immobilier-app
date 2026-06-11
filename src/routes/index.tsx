@@ -407,11 +407,12 @@ function Page() {
                 Estimation
               </div>
               <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
-                Votre bien mérite une stratégie claire.
+                Votre vente mérite un suivi clair jusqu'à la signature.
               </h2>
               <p className="mt-5 max-w-xl text-primary-foreground/70">
-                Demandez une estimation. Un conseiller vous rappelle rapidement
-                pour échanger sur votre projet.
+                Demandez une première estimation indicative, puis avancez avec
+                un conseiller et un espace vendeur privé pour suivre chaque
+                étape importante.
               </p>
             </div>
             <div className="flex md:justify-end">
@@ -419,7 +420,7 @@ function Page() {
                 to={agencyConfig.navigation.primaryCta.to}
                 className="inline-flex items-center gap-2 rounded-full bg-gold px-6 py-4 text-sm font-medium text-gold-foreground transition hover:bg-gold/90"
               >
-                {agencyConfig.navigation.primaryCta.label}
+                Estimer mon bien
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
