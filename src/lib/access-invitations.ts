@@ -1,4 +1,11 @@
 import { agencyConfig } from "@/lib/agency-config";
+import {
+  buildInvitationEmail,
+  buildPublicAppUrl,
+  openGmailCompose,
+  openMailApp,
+  type InvitationEmail,
+} from "@/lib/invitation-email";
 import { supabase, type UserRole } from "@/lib/supabase";
 
 const LOCAL_KEY = "signature_access_invitations";
@@ -33,12 +40,7 @@ export type AccessInvitation = {
   activated_at?: string | null;
 };
 
-export type AccessEmail = {
-  activationUrl: string;
-  subject: string;
-  body: string;
-  mailtoHref: string;
-};
+export type AccessEmail = InvitationEmail;
 
 export type AccessCreationResult = AccessEmail & {
   invitation: AccessInvitation;
@@ -84,24 +86,14 @@ export function generateAccessToken() {
     .join("");
 }
 
-function getOrigin() {
-  return typeof window === "undefined" ? "" : window.location.origin;
-}
-
 function getActivationPath(role: AccessRole) {
   return role === "agency_admin" ? "/activation-patron" : "/activation-agent";
 }
 
 export function getAccessActivationUrl(role: AccessRole, token: string) {
-  return `${getOrigin()}${getActivationPath(role)}?token=${encodeURIComponent(
+  return buildPublicAppUrl(`${getActivationPath(role)}?token=${encodeURIComponent(
     token,
-  )}`;
-}
-
-function buildMailto(email: string, subject: string, body: string) {
-  return `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
-    subject,
-  )}&body=${encodeURIComponent(body)}`;
+  )}`);
 }
 
 export function buildAgencyAdminEmail({
@@ -128,12 +120,12 @@ Une fois votre mot de passe créé, vous pourrez revenir sur le site ${agencyCon
 À bientôt,
 ${agencyConfig.brand.name}`;
 
-  return {
+  return buildInvitationEmail({
+    email,
     activationUrl,
     subject,
     body,
-    mailtoHref: buildMailto(email, subject, body),
-  };
+  });
 }
 
 export function buildAgentEmail({
@@ -158,16 +150,20 @@ Une fois votre mot de passe créé, vous pourrez revenir sur le site ${agencyCon
 À bientôt,
 ${agencyConfig.brand.name}`;
 
-  return {
+  return buildInvitationEmail({
+    email,
     activationUrl,
     subject,
     body,
-    mailtoHref: buildMailto(email, subject, body),
-  };
+  });
 }
 
 export function openAccessEmail(mailtoHref: string) {
-  window.location.href = mailtoHref;
+  openMailApp(mailtoHref);
+}
+
+export function openAccessGmail(gmailHref: string) {
+  return openGmailCompose(gmailHref);
 }
 
 function upsertLocalInvitation(invitation: AccessInvitation) {

@@ -16,6 +16,30 @@ alter table public.profiles
 alter table public.profiles
   add column if not exists created_at timestamptz not null default now();
 
+alter table public.profiles
+  add column if not exists agency_id uuid;
+
+alter table public.profiles
+  add column if not exists status text not null default 'active';
+
+alter table public.profiles
+  add column if not exists full_name text;
+
+alter table public.profiles
+  add column if not exists phone text;
+
+alter table public.profiles
+  add column if not exists updated_at timestamptz not null default now();
+
+do $$
+begin
+  if to_regclass('public.seller_spaces') is not null then
+    execute 'drop policy if exists "agents manage seller spaces" on public.seller_spaces';
+    execute 'drop policy if exists "seller reads own space" on public.seller_spaces';
+  end if;
+end;
+$$;
+
 do $$
 declare
   profile_policy record;
@@ -34,14 +58,29 @@ begin
 end;
 $$;
 
-alter table public.profiles
-  alter column role drop default;
+do $$
+declare
+  role_data_type text;
+begin
+  select data_type
+  into role_data_type
+  from information_schema.columns
+  where table_schema = 'public'
+    and table_name = 'profiles'
+    and column_name = 'role';
 
-alter table public.profiles
-  alter column role type text using role::text;
+  if role_data_type is distinct from 'text' then
+    alter table public.profiles
+      alter column role drop default;
 
-alter table public.profiles
-  alter column role set default 'seller';
+    alter table public.profiles
+      alter column role type text using role::text;
+  end if;
+
+  alter table public.profiles
+    alter column role set default 'seller';
+end;
+$$;
 
 alter table public.profiles
   drop constraint if exists profiles_role_check;
@@ -62,9 +101,21 @@ update public.profiles
 set role = 'seller'
 where role::text not in ('owner', 'agency_admin', 'agent', 'seller');
 
+update public.profiles
+set status = 'active'
+where status is null
+  or status::text not in ('pending', 'active', 'disabled');
+
 alter table public.profiles
   add constraint profiles_role_check
   check (role::text in ('owner', 'agency_admin', 'agent', 'seller'));
+
+alter table public.profiles
+  drop constraint if exists profiles_status_check;
+
+alter table public.profiles
+  add constraint profiles_status_check
+  check (status::text in ('pending', 'active', 'disabled'));
 
 alter table public.profiles enable row level security;
 
@@ -112,6 +163,32 @@ create table if not exists public.agencies (
   updated_at timestamptz not null default now()
 );
 
+update public.profiles p
+set agency_id = null
+where p.agency_id is not null
+  and not exists (
+    select 1
+    from public.agencies a
+    where a.id = p.agency_id
+  );
+
+do $$
+begin
+  if not exists (
+    select 1
+    from pg_constraint
+    where conname = 'profiles_agency_id_fkey'
+      and conrelid = 'public.profiles'::regclass
+  ) then
+    alter table public.profiles
+      add constraint profiles_agency_id_fkey
+      foreign key (agency_id)
+      references public.agencies(id)
+      on delete set null;
+  end if;
+end;
+$$;
+
 create table if not exists public.access_invitations (
   id uuid primary key default gen_random_uuid(),
   agency_id uuid not null references public.agencies(id) on delete cascade,
@@ -157,12 +234,22 @@ security definer
 set search_path = public
 stable
 as $$
-  select ai.agency_id
-  from public.access_invitations ai
-  where ai.user_id = auth.uid()
-    and ai.status = 'active'
-  order by ai.created_at desc
-  limit 1;
+  select coalesce(
+    (
+      select p.agency_id
+      from public.profiles p
+      where p.id = auth.uid()
+      limit 1
+    ),
+    (
+      select ai.agency_id
+      from public.access_invitations ai
+      where ai.user_id = auth.uid()
+        and ai.status = 'active'
+      order by ai.created_at desc
+      limit 1
+    )
+  );
 $$;
 
 drop policy if exists "owner manages agencies" on public.agencies;
@@ -219,6 +306,47 @@ with check (
   and role = 'agent'
   and agency_id = public.current_user_agency_id()
 );
+
+do $$
+begin
+  if to_regclass('public.seller_spaces') is not null then
+    alter table public.seller_spaces enable row level security;
+
+    execute 'drop policy if exists "agents manage seller spaces" on public.seller_spaces';
+    execute $policy$
+      create policy "agents manage seller spaces"
+      on public.seller_spaces
+      for all
+      to authenticated
+      using (
+        exists (
+          select 1
+          from public.profiles
+          where profiles.id = auth.uid()
+            and profiles.role::text in ('owner', 'agency_admin', 'agent')
+        )
+      )
+      with check (
+        exists (
+          select 1
+          from public.profiles
+          where profiles.id = auth.uid()
+            and profiles.role::text in ('owner', 'agency_admin', 'agent')
+        )
+      )
+    $policy$;
+
+    execute 'drop policy if exists "seller reads own space" on public.seller_spaces';
+    execute $policy$
+      create policy "seller reads own space"
+      on public.seller_spaces
+      for select
+      to authenticated
+      using (user_id = auth.uid())
+    $policy$;
+  end if;
+end;
+$$;
 
 create or replace function public.get_my_agency()
 returns table (
@@ -295,6 +423,130 @@ $$;
 
 grant execute on function public.get_access_invitation_by_token(text, text) to anon, authenticated;
 
+create or replace function public.handle_new_user()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  metadata jsonb;
+  requested_role text;
+  invitation record;
+  profile_full_name text;
+  profile_phone text;
+begin
+  metadata := coalesce(new.raw_user_meta_data, '{}'::jsonb);
+  requested_role := coalesce(nullif(metadata->>'role', ''), 'seller');
+
+  if requested_role = 'vendeur' then
+    requested_role := 'seller';
+  elsif requested_role = 'agent_immobilier' then
+    requested_role := 'agent';
+  end if;
+
+  if requested_role not in ('owner', 'agency_admin', 'agent', 'seller') then
+    requested_role := 'seller';
+  end if;
+
+  if requested_role = 'owner' and lower(new.email) <> 'sempehugo03@gmail.com' then
+    requested_role := 'seller';
+  end if;
+
+  if requested_role in ('agency_admin', 'agent') then
+    select *
+    into invitation
+    from public.access_invitations ai
+    where lower(ai.email) = lower(new.email)
+      and ai.role = requested_role
+      and ai.status = 'pending'
+    order by ai.created_at desc
+    limit 1;
+
+    if not found then
+      raise exception 'No pending access invitation for this account';
+    end if;
+
+    profile_full_name := coalesce(
+      nullif(trim(concat_ws(' ', invitation.first_name, invitation.last_name)), ''),
+      new.email
+    );
+    profile_phone := invitation.phone;
+
+    insert into public.profiles (
+      id,
+      email,
+      role,
+      agency_id,
+      status,
+      full_name,
+      phone,
+      updated_at
+    )
+    values (
+      new.id,
+      new.email,
+      requested_role,
+      invitation.agency_id,
+      'pending',
+      profile_full_name,
+      profile_phone,
+      now()
+    )
+    on conflict (id) do update
+    set
+      email = excluded.email,
+      role = excluded.role,
+      agency_id = excluded.agency_id,
+      status = excluded.status,
+      full_name = excluded.full_name,
+      phone = excluded.phone,
+      updated_at = now();
+  else
+    profile_full_name := coalesce(
+      nullif(metadata->>'full_name', ''),
+      nullif(trim(concat_ws(' ', metadata->>'first_name', metadata->>'last_name')), ''),
+      new.email
+    );
+    profile_phone := nullif(metadata->>'phone', '');
+
+    insert into public.profiles (
+      id,
+      email,
+      role,
+      status,
+      full_name,
+      phone,
+      updated_at
+    )
+    values (
+      new.id,
+      new.email,
+      requested_role,
+      'active',
+      profile_full_name,
+      profile_phone,
+      now()
+    )
+    on conflict (id) do update
+    set
+      email = excluded.email,
+      role = excluded.role,
+      status = excluded.status,
+      full_name = excluded.full_name,
+      phone = excluded.phone,
+      updated_at = now();
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+after insert on auth.users
+for each row execute function public.handle_new_user();
+
 create or replace function public.activate_access_invitation(
   p_token text,
   p_role text,
@@ -307,6 +559,8 @@ set search_path = public
 as $$
 declare
   user_email text;
+  invitation record;
+  profile_full_name text;
 begin
   if p_role not in ('agency_admin', 'agent') then
     raise exception 'Invalid role';
@@ -316,6 +570,23 @@ begin
   from auth.users
   where id = p_user_id;
 
+  if user_email is null then
+    raise exception 'User not found';
+  end if;
+
+  select *
+  into invitation
+  from public.access_invitations ai
+  where ai.activation_token = p_token
+    and ai.role = p_role
+    and ai.status = 'pending'
+    and lower(ai.email) = lower(user_email)
+  limit 1;
+
+  if not found then
+    raise exception 'Invalid or expired activation token';
+  end if;
+
   update public.access_invitations
   set
     status = 'active',
@@ -323,21 +594,42 @@ begin
     user_id = p_user_id,
     activated_at = now(),
     updated_at = now()
-  where activation_token = p_token
-    and role = p_role
-    and status = 'pending'
-    and lower(email) = lower(user_email);
+  where id = invitation.id;
 
-  if not found then
-    raise exception 'Invalid or expired activation token';
-  end if;
+  profile_full_name := coalesce(
+    nullif(trim(concat_ws(' ', invitation.first_name, invitation.last_name)), ''),
+    user_email
+  );
 
-  insert into public.profiles (id, email, role)
-  values (p_user_id, user_email, p_role)
+  insert into public.profiles (
+    id,
+    email,
+    role,
+    agency_id,
+    status,
+    full_name,
+    phone,
+    updated_at
+  )
+  values (
+    p_user_id,
+    user_email,
+    p_role,
+    invitation.agency_id,
+    'active',
+    profile_full_name,
+    invitation.phone,
+    now()
+  )
   on conflict (id) do update
   set
     email = excluded.email,
-    role = p_role;
+    role = excluded.role,
+    agency_id = excluded.agency_id,
+    status = 'active',
+    full_name = excluded.full_name,
+    phone = excluded.phone,
+    updated_at = now();
 end;
 $$;
 

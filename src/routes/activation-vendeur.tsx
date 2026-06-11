@@ -20,7 +20,21 @@ import {
   markSellerSpaceActivated,
   type SellerSpace,
 } from "@/lib/seller-space";
-import { getDashboardPath, supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+
+const ACTIVATION_SUCCESS_MESSAGE =
+  "Votre espace vendeur est activé. Vous pouvez maintenant vous connecter depuis Mon suivi.";
+const ALREADY_ACTIVATED_MESSAGE =
+  "Votre espace est déjà activé. Connectez-vous depuis Mon suivi.";
+
+function isAlreadyRegisteredError(message: string) {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes("already registered") ||
+    normalizedMessage.includes("already exists") ||
+    normalizedMessage.includes("user already")
+  );
+}
 
 export const Route = createFileRoute("/activation-vendeur")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -51,6 +65,7 @@ function ActivationVendeurPage() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -66,6 +81,7 @@ function ActivationVendeurPage() {
 
       setSpace(result?.space ?? null);
       setPersistedIn(result?.persistedIn ?? null);
+      setSuccessMessage(result ? null : ALREADY_ACTIVATED_MESSAGE);
       setLoading(false);
     }
 
@@ -82,6 +98,7 @@ function ActivationVendeurPage() {
 
     setSubmitting(true);
     setError(null);
+    setSuccessMessage(null);
 
     if (password.length < 6) {
       setSubmitting(false);
@@ -105,6 +122,10 @@ function ActivationVendeurPage() {
 
     if (signUpError) {
       setSubmitting(false);
+      if (isAlreadyRegisteredError(signUpError.message)) {
+        setSuccessMessage(ALREADY_ACTIVATED_MESSAGE);
+        return;
+      }
       setError(signUpError.message);
       return;
     }
@@ -150,19 +171,14 @@ function ActivationVendeurPage() {
 
       if (signInError) {
         setSubmitting(false);
-        setError(
-          "Le compte est créé, mais la connexion automatique a échoué. Essayez depuis “Mon suivi”.",
-        );
+        setSuccessMessage(ACTIVATION_SUCCESS_MESSAGE);
         return;
       }
     }
 
-    const profile = await refreshProfile();
+    await refreshProfile();
     setSubmitting(false);
-    navigate({
-      to: getDashboardPath(profile?.role ?? "seller"),
-      replace: true,
-    });
+    navigate({ to: "/vendeur", replace: true });
   }
 
   return (
@@ -202,14 +218,42 @@ function ActivationVendeurPage() {
             </CardHeader>
             <CardContent>
               {!loading && !space && (
-                <Alert variant="destructive">
-                  <AlertDescription>
-                    Ce lien d’activation est invalide ou a déjà été utilisé.
-                  </AlertDescription>
-                </Alert>
+                <div className="space-y-4">
+                  <Alert>
+                    <AlertDescription>
+                      {token
+                        ? ALREADY_ACTIVATED_MESSAGE
+                        : "Lien d'activation manquant."}
+                    </AlertDescription>
+                  </Alert>
+                  <Button
+                    className="w-full rounded-full"
+                    type="button"
+                    onClick={() => navigate({ to: "/mon-suivi" })}
+                  >
+                    Aller à Mon suivi
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
               )}
 
-              {space && (
+              {successMessage && space && (
+                <div className="space-y-4">
+                  <Alert>
+                    <AlertDescription>{successMessage}</AlertDescription>
+                  </Alert>
+                  <Button
+                    className="w-full rounded-full"
+                    type="button"
+                    onClick={() => navigate({ to: "/mon-suivi" })}
+                  >
+                    Aller à Mon suivi
+                    <ArrowRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {space && !successMessage && (
                 <form className="space-y-4" onSubmit={onSubmit}>
                   {error && (
                     <Alert variant="destructive">

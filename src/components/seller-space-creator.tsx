@@ -1,15 +1,18 @@
-import { Copy, Mail, Send } from "lucide-react";
+import { Copy, ExternalLink, Mail, Send } from "lucide-react";
 import { FormEvent, useMemo, useState } from "react";
 
+import { PrivateStatusBadge } from "@/components/private-shell";
 import {
   createOrRefreshSellerSpace,
   openSellerSpaceEmail,
+  openSellerSpaceGmail,
   type SellerSpaceCreationResult,
 } from "@/lib/seller-space";
 
 type SellerSpaceCreatorProps = {
   propertyId: string;
   propertyTitle: string;
+  sellerSpaceExists?: boolean;
   initialSeller: {
     firstName: string;
     lastName: string;
@@ -21,6 +24,7 @@ type SellerSpaceCreatorProps = {
 export function SellerSpaceCreator({
   propertyId,
   propertyTitle,
+  sellerSpaceExists = false,
   initialSeller,
 }: SellerSpaceCreatorProps) {
   const [seller, setSeller] = useState({
@@ -32,9 +36,18 @@ export function SellerSpaceCreator({
   const [result, setResult] = useState<SellerSpaceCreationResult | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  const [gmailBlocked, setGmailBlocked] = useState(false);
   const fullName = useMemo(
-    () => `${seller.firstName} ${seller.lastName}`.trim(),
-    [seller.firstName, seller.lastName],
+    () =>
+      `${result?.space.seller_first_name ?? seller.firstName} ${
+        result?.space.seller_last_name ?? seller.lastName
+      }`.trim(),
+    [
+      result?.space.seller_first_name,
+      result?.space.seller_last_name,
+      seller.firstName,
+      seller.lastName,
+    ],
   );
 
   async function createSellerSpace(event: FormEvent<HTMLFormElement>) {
@@ -53,7 +66,7 @@ export function SellerSpaceCreator({
 
     setResult(nextResult);
     setSubmitting(false);
-    openSellerSpaceEmail(nextResult.mailtoHref);
+    setGmailBlocked(!openSellerSpaceGmail(nextResult.gmailHref));
   }
 
   async function copy(value: string, label: string) {
@@ -62,18 +75,18 @@ export function SellerSpaceCreator({
   }
 
   return (
-    <section className="rounded-2xl border border-border bg-card p-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Espace vendeur
-          </div>
-          <h2 className="mt-2 font-display text-2xl">Créer l’espace vendeur</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-relaxed text-muted-foreground">
-            Renseignez les informations vendeur. Le compte sera préparé, puis
-            l’application mail s’ouvrira avec l’email d’activation déjà rempli.
-          </p>
-        </div>
+    <section className="rounded-[24px] border border-[#e8e0d5] bg-white p-6 shadow-[0_18px_45px_rgba(17,24,39,0.04)] md:p-8">
+      <div>
+        <h2 className="font-display text-3xl leading-tight text-primary">
+          {sellerSpaceExists
+            ? "Renvoyer l’accès vendeur"
+            : "Créer l’espace vendeur"}
+        </h2>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary/55">
+          {sellerSpaceExists
+            ? "L’espace vendeur est actif pour ce bien."
+            : "L’espace vendeur n’a pas encore été créé pour ce bien."}
+        </p>
       </div>
 
       <form
@@ -131,38 +144,67 @@ export function SellerSpaceCreator({
             className="inline-flex w-full items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60 md:w-auto"
           >
             <Send className="h-4 w-4" />
-            {submitting ? "Création..." : "Créer l’espace vendeur"}
+            {submitting
+              ? "Préparation..."
+              : sellerSpaceExists
+                ? "Renvoyer l’accès vendeur"
+                : "Créer l’espace vendeur"}
           </button>
         </div>
       </form>
 
       {result && (
-        <div className="mt-6 rounded-2xl border border-gold bg-gold/10 p-5">
-          <div className="font-medium">
-            {result.alreadyExists
-              ? "L’espace vendeur existe déjà."
-              : "L’espace vendeur a été créé. L’email d’activation est prêt à être envoyé."}
+        <div className="mt-6 rounded-[22px] border border-emerald-100 bg-emerald-50/70 p-5">
+          <div className="font-display text-2xl text-primary">
+            Accès prêt à envoyer
           </div>
-          <p className="mt-2 text-sm text-muted-foreground">
-            Vendeur : {fullName || result.space.seller_email} ·{" "}
-            {result.persistedIn === "supabase"
-              ? "enregistré dans Supabase"
-              : "enregistré localement pour la démo"}
+          <p className="mt-2 text-sm leading-relaxed text-primary/60">
+            L’accès a été créé avec succès. Vous pouvez maintenant envoyer
+            l’invitation.
           </p>
+          {gmailBlocked && (
+            <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              L’accès est prêt. Cliquez sur “Ouvrir dans Gmail” pour envoyer
+              l’invitation.
+            </p>
+          )}
+
+          <div className="mt-4 grid gap-3 rounded-2xl border border-emerald-100 bg-white/80 p-4 text-sm sm:grid-cols-2">
+            <Summary label="Bien" value={result.space.property_title} />
+            <Summary label="Vendeur" value={fullName} />
+            <Summary
+              label="Email destinataire"
+              value={result.space.seller_email}
+            />
+            <div>
+              <div className="text-xs text-primary/45">Statut</div>
+              <div className="mt-1">
+                <PrivateStatusBadge status={result.space.status} />
+              </div>
+            </div>
+          </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
             <button
               type="button"
-              onClick={() => openSellerSpaceEmail(result.mailtoHref)}
+              onClick={() => openSellerSpaceGmail(result.gmailHref)}
               className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
             >
+              <ExternalLink className="h-4 w-4" />
+              Ouvrir dans Gmail
+            </button>
+            <button
+              type="button"
+              onClick={() => openSellerSpaceEmail(result.mailtoHref)}
+              className="inline-flex items-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-[#faf7f0]"
+            >
               <Mail className="h-4 w-4" />
-              Ouvrir l’email
+              Ouvrir l’application mail
             </button>
             <button
               type="button"
               onClick={() => copy(result.body, "message")}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-[#faf7f0]"
             >
               <Copy className="h-4 w-4" />
               Copier le message
@@ -170,7 +212,7 @@ export function SellerSpaceCreator({
             <button
               type="button"
               onClick={() => copy(result.activationUrl, "lien")}
-              className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-4 py-2.5 text-sm font-medium transition hover:bg-secondary"
+              className="inline-flex items-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-[#faf7f0]"
             >
               <Copy className="h-4 w-4" />
               Copier le lien
@@ -178,14 +220,14 @@ export function SellerSpaceCreator({
           </div>
 
           {copied && (
-            <div className="mt-3 text-xs text-muted-foreground">
+            <div className="mt-3 text-xs text-primary/55">
               {copied === "message" ? "Message copié." : "Lien copié."}
             </div>
           )}
         </div>
       )}
 
-      <style>{`.seller-input{width:100%;border:1px solid var(--color-input);background:var(--color-background);padding:0.75rem 0.9rem;border-radius:0.75rem;font-size:0.875rem;outline:none}.seller-input:focus{box-shadow:0 0 0 2px var(--color-ring)}`}</style>
+      <style>{`.seller-input{width:100%;border:1px solid #e8e0d5;background:#fffdf9;padding:0.75rem 0.9rem;border-radius:1rem;font-size:0.875rem;outline:none}.seller-input:focus{box-shadow:0 0 0 2px rgba(31,41,55,0.12)}`}</style>
     </section>
   );
 }
@@ -199,8 +241,17 @@ function Field({
 }) {
   return (
     <label>
-      <div className="mb-1.5 text-xs font-medium text-foreground">{label}</div>
+      <div className="mb-1.5 text-xs font-medium text-primary">{label}</div>
       {children}
     </label>
+  );
+}
+
+function Summary({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs text-primary/45">{label}</div>
+      <div className="mt-1 font-medium text-primary">{value || "—"}</div>
+    </div>
   );
 }

@@ -32,6 +32,66 @@ type AccessActivationPageProps = {
   emailLabel: string;
 };
 
+function getInvitationFullName(invitation: AccessInvitation) {
+  return (
+    [invitation.first_name, invitation.last_name]
+      .filter(Boolean)
+      .join(" ")
+      .trim() || invitation.email
+  );
+}
+
+function getActivationMetadata(invitation: AccessInvitation, role: AccessRole) {
+  return {
+    role,
+    email: invitation.email,
+    agency_id: invitation.agency_id,
+    agency_name: invitation.agency_name,
+    first_name: invitation.first_name,
+    last_name: invitation.last_name,
+    full_name: getInvitationFullName(invitation),
+    phone: invitation.phone,
+    status: "pending",
+  };
+}
+
+async function upsertLocalActivationProfile({
+  userId,
+  invitation,
+  role,
+}: {
+  userId: string;
+  invitation: AccessInvitation;
+  role: AccessRole;
+}) {
+  const profile = {
+    id: userId,
+    email: invitation.email,
+    role,
+    agency_id: invitation.agency_id,
+    status: "active",
+    full_name: getInvitationFullName(invitation),
+    phone: invitation.phone,
+  };
+
+  const { error } = await supabase
+    .from("profiles")
+    .upsert(profile, { onConflict: "id" });
+
+  if (!error) return null;
+
+  const { error: minimalError } = await supabase.from("profiles").upsert(
+    {
+      id: userId,
+      email: invitation.email,
+      role,
+    },
+    { onConflict: "id" },
+  );
+
+  return minimalError ?? error;
+}
+
 export function AccessActivationPage({
   token,
   role,
@@ -99,7 +159,7 @@ export function AccessActivationPage({
       email: invitation.email,
       password,
       options: {
-        data: { role },
+        data: getActivationMetadata(invitation, role),
       },
     });
 
@@ -117,14 +177,11 @@ export function AccessActivationPage({
     }
 
     if (persistedIn === "local") {
-      const { error: profileError } = await supabase.from("profiles").upsert(
-        {
-          id: userId,
-          email: invitation.email,
-          role,
-        },
-        { onConflict: "id" },
-      );
+      const profileError = await upsertLocalActivationProfile({
+        userId,
+        invitation,
+        role,
+      });
 
       if (profileError) {
         setSubmitting(false);
@@ -140,6 +197,11 @@ export function AccessActivationPage({
         "Unable to mark access invitation as activated",
         activationError,
       );
+      setSubmitting(false);
+      setError(
+        "Le compte est cree, mais l'activation n'a pas pu etre finalisee. Contactez Signature Immobilier.",
+      );
+      return;
     }
 
     if (!data.session) {

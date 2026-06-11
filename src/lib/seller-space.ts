@@ -1,4 +1,11 @@
 import { agencyConfig } from "@/lib/agency-config";
+import {
+  buildInvitationEmail,
+  buildPublicAppUrl,
+  openGmailCompose,
+  openMailApp,
+  type InvitationEmail,
+} from "@/lib/invitation-email";
 import { supabase } from "@/lib/supabase";
 
 const LOCAL_KEY = "signature_seller_spaces";
@@ -29,12 +36,7 @@ export type SellerSpaceInput = {
   phone: string;
 };
 
-export type SellerSpaceEmail = {
-  activationUrl: string;
-  subject: string;
-  body: string;
-  mailtoHref: string;
-};
+export type SellerSpaceEmail = InvitationEmail;
 
 export type SellerSpaceCreationResult = SellerSpaceEmail & {
   space: SellerSpace;
@@ -62,8 +64,9 @@ export function generateActivationToken() {
 }
 
 export function getActivationUrl(token: string) {
-  const origin = typeof window === "undefined" ? "" : window.location.origin;
-  return `${origin}/activation-vendeur?token=${encodeURIComponent(token)}`;
+  return buildPublicAppUrl(
+    `/activation-vendeur?token=${encodeURIComponent(token)}`,
+  );
 }
 
 export function buildSellerSpaceEmail({
@@ -90,15 +93,20 @@ Une fois votre mot de passe créé, vous pourrez revenir sur le site ${agencyCon
 À bientôt,
 ${agencyConfig.brand.name}`;
 
-  const mailtoHref = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+  return buildInvitationEmail({
+    email,
+    activationUrl,
     subject,
-  )}&body=${encodeURIComponent(body)}`;
-
-  return { activationUrl, subject, body, mailtoHref };
+    body,
+  });
 }
 
 export function openSellerSpaceEmail(mailtoHref: string) {
-  window.location.href = mailtoHref;
+  openMailApp(mailtoHref);
+}
+
+export function openSellerSpaceGmail(gmailHref: string) {
+  return openGmailCompose(gmailHref);
 }
 
 export async function createOrRefreshSellerSpace(
@@ -144,7 +152,7 @@ export async function createOrRefreshSellerSpace(
         ...email,
         activationUrl:
           updated.status === "activated"
-            ? `${window.location.origin}/mon-suivi`
+            ? buildPublicAppUrl("/mon-suivi")
             : activationUrl,
         space: updated as SellerSpace,
         alreadyExists: true,
@@ -220,7 +228,7 @@ export async function createOrRefreshSellerSpace(
     ...email,
     activationUrl:
       nextSpace.status === "activated"
-        ? `${window.location.origin}/mon-suivi`
+        ? buildPublicAppUrl("/mon-suivi")
         : activationUrl,
     space: nextSpace,
     alreadyExists,

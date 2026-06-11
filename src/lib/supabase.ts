@@ -1,12 +1,18 @@
 import { createClient } from "@supabase/supabase-js";
 
 export type UserRole = "owner" | "agency_admin" | "agent" | "seller";
+export type ProfileStatus = "pending" | "active" | "disabled";
 
 export type Profile = {
   id: string;
   email: string;
   role: UserRole;
+  agency_id?: string | null;
+  status?: ProfileStatus | string | null;
+  full_name?: string | null;
+  phone?: string | null;
   created_at?: string;
+  updated_at?: string;
 };
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;

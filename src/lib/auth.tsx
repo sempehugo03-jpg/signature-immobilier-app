@@ -18,15 +18,63 @@ import {
 const OWNER_EMAIL = "sempehugo03@gmail.com";
 const PUBLIC_FALLBACK_ROLE: UserRole = "seller";
 
+function getMetadataValue(user: User, key: string) {
+  const value = user.user_metadata?.[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function getMetadataFullName(user: User) {
+  const fullName = getMetadataValue(user, "full_name");
+  if (fullName) return fullName;
+
+  const firstName = getMetadataValue(user, "first_name");
+  const lastName = getMetadataValue(user, "last_name");
+  return [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+}
+
+async function upsertProfile(profile: Profile) {
+  const { data, error } = await supabase
+    .from("profiles")
+    .upsert(profile, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  if (!error) return data as Profile;
+
+  const minimalProfile = {
+    id: profile.id,
+    email: profile.email,
+    role: profile.role,
+  };
+
+  const { data: minimalData, error: minimalError } = await supabase
+    .from("profiles")
+    .upsert(minimalProfile, { onConflict: "id" })
+    .select("*")
+    .single();
+
+  if (minimalError) {
+    console.error("Unable to create profile", minimalError);
+    return null;
+  }
+
+  return minimalData as Profile;
+}
+
 async function fetchProfile(user: User | null) {
   if (!user) return null;
 
   const email = user.email ?? "";
   const forcedOwnerRole = email.toLowerCase() === OWNER_EMAIL;
+  const metadataRole = normalizeUserRole(user.user_metadata?.role);
+  const metadataAgencyId = getMetadataValue(user, "agency_id");
+  const metadataFullName = getMetadataFullName(user);
+  const metadataPhone = getMetadataValue(user, "phone");
+  const metadataStatus = getMetadataValue(user, "status") ?? "active";
 
   const { data, error } = await supabase
     .from("profiles")
-    .select("id,email,role,created_at")
+    .select("*")
     .eq("id", user.id)
     .maybeSingle();
 
@@ -40,9 +88,16 @@ async function fetchProfile(user: User | null) {
     const role: UserRole = forcedOwnerRole ? "owner" : normalizedRole;
 
     if (data?.role !== role) {
-      await supabase
-        .from("profiles")
-        .upsert({ id: user.id, email, role }, { onConflict: "id" });
+      await upsertProfile({
+        ...data,
+        id: user.id,
+        email,
+        role,
+        agency_id: data?.agency_id ?? metadataAgencyId,
+        status: data?.status ?? metadataStatus,
+        full_name: data?.full_name ?? metadataFullName,
+        phone: data?.phone ?? metadataPhone,
+      } as Profile);
     }
 
     return { ...data, email, role } as Profile;
@@ -51,21 +106,16 @@ async function fetchProfile(user: User | null) {
   const fallbackProfile = {
     id: user.id,
     email,
-    role: forcedOwnerRole ? "owner" : PUBLIC_FALLBACK_ROLE,
+    role: forcedOwnerRole ? "owner" : (metadataRole ?? PUBLIC_FALLBACK_ROLE),
+    agency_id: metadataAgencyId,
+    status: metadataStatus,
+    full_name: metadataFullName,
+    phone: metadataPhone,
   };
 
-  const { data: inserted, error: insertError } = await supabase
-    .from("profiles")
-    .upsert(fallbackProfile, { onConflict: "id" })
-    .select("id,email,role,created_at")
-    .single();
+  const inserted = await upsertProfile(fallbackProfile);
 
-  if (insertError) {
-    console.error("Unable to create profile", insertError);
-    return fallbackProfile;
-  }
-
-  return inserted as Profile;
+  return inserted ?? fallbackProfile;
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
