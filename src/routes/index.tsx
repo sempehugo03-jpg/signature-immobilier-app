@@ -20,12 +20,12 @@ export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
       {
-        title: `${agencyConfig.brand.name} — Biens premium et vente transparente`,
+        title: `${agencyConfig.brand.name} — Espace vendeur privé et vente transparente`,
       },
       {
         name: "description",
         content:
-          "Découvrez les biens à vendre et demandez une estimation avec une agence premium centrée sur la transparence vendeur.",
+          "Vendez votre bien avec une présentation premium et un espace vendeur privé pour suivre visites, comptes rendus, documents et étapes de vente.",
       },
       { property: "og:title", content: agencyConfig.brand.name },
       {
@@ -60,6 +60,29 @@ const reassurance = [
   },
 ] as const;
 
+const sellerSpaceBlocks = [
+  {
+    icon: CheckCircle2,
+    title: "Progression de la vente",
+    text: "Mandat, annonce, visites, offre, compromis, vente.",
+  },
+  {
+    icon: Bell,
+    title: "Prochaine visite",
+    text: "Date, heure et informations importantes.",
+  },
+  {
+    icon: FileText,
+    title: "Comptes rendus",
+    text: "Les retours après visite sont centralisés.",
+  },
+  {
+    icon: FolderClosed,
+    title: "Documents",
+    text: "Mandat, diagnostics, offre et compromis accessibles facilement.",
+  },
+] as const;
+
 function Page() {
   const [selectedProperty, setSelectedProperty] = useState<Property | null>(
     null,
@@ -76,11 +99,15 @@ function Page() {
               {agencyConfig.brand.positioning}
             </div>
             <h1 className="mt-7 font-display text-5xl leading-[0.96] tracking-normal md:text-7xl">
-              Des biens d’exception, une vente en toute transparence.
+              Vendez votre bien sans rester dans le flou.
             </h1>
             <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">
-              Consultez les biens de l’agence, puis demandez une estimation pour
-              vendre avec un suivi clair, premium et rassurant.
+              Signature Immobilier vous accompagne avec une présentation premium
+              et un espace vendeur privé pour suivre les visites, les comptes
+              rendus, les documents et les étapes de vente.
+            </p>
+            <p className="mt-4 max-w-lg font-medium text-foreground">
+              Vous ne demandez plus où ça en est. Vous le voyez.
             </p>
 
             <div className="mt-8 max-w-xl rounded-full border border-border bg-card p-2 shadow-xl shadow-foreground/5">
@@ -104,19 +131,20 @@ function Page() {
             </div>
 
             <div className="mt-8 flex flex-wrap gap-3">
-              <a
-                href="#biens-a-vendre"
-                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
-              >
-                Voir les biens
-                <ArrowRight className="h-4 w-4" />
-              </a>
               <Link
                 to={agencyConfig.navigation.primaryCta.to}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+              >
+                Estimer mon bien
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+              <a
+                href="#biens-a-vendre"
                 className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
               >
-                {agencyConfig.navigation.primaryCta.label}
-              </Link>
+                Voir les biens à vendre
+                <ArrowRight className="h-4 w-4" />
+              </a>
             </div>
           </div>
 
@@ -193,6 +221,73 @@ function Page() {
             />
           ))}
         </div>
+
+        <div className="mt-12 rounded-[2rem] border border-border bg-card p-7 shadow-sm md:flex md:items-center md:justify-between md:gap-8 md:p-10">
+          <div className="max-w-2xl">
+            <h3 className="font-display text-3xl leading-tight md:text-4xl">
+              Votre bien mérite la même qualité de présentation.
+            </h3>
+            <p className="mt-4 text-base leading-relaxed text-muted-foreground">
+              Chaque annonce est pensée pour valoriser le bien, rassurer les
+              acheteurs et donner au vendeur une vision claire de l’avancement.
+            </p>
+          </div>
+          <Link
+            to={agencyConfig.navigation.primaryCta.to}
+            className="mt-6 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 md:mt-0"
+          >
+            Estimer mon bien
+            <ArrowRight className="h-4 w-4" />
+          </Link>
+        </div>
+      </section>
+
+      <section className="bg-background">
+        <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-24">
+          <div className="max-w-3xl">
+            <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+              Mon suivi
+            </div>
+            <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
+              Un espace vendeur privé après le mandat.
+            </h2>
+            <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
+              Une fois votre bien confié à l’agence, vous accédez à un espace
+              simple pour suivre l’avancement de votre vente sans relancer votre
+              conseiller.
+            </p>
+          </div>
+
+          <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {sellerSpaceBlocks.map((item) => (
+              <div
+                key={item.title}
+                className="rounded-2xl border border-border bg-card p-6 shadow-sm"
+              >
+                <div className="grid h-11 w-11 place-items-center rounded-full bg-secondary text-gold">
+                  <item.icon className="h-5 w-5" />
+                </div>
+                <div className="mt-6 font-display text-xl">{item.title}</div>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {item.text}
+                </p>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-10 flex flex-wrap items-center gap-4">
+            <p className="max-w-xl font-medium text-foreground">
+              Vous ne demandez plus où ça en est. Vous le voyez.
+            </p>
+            <Link
+              to={agencyConfig.navigation.primaryCta.to}
+              className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+            >
+              Estimer mon bien
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
       </section>
 
       <section id="estimer-mon-bien" className="bg-secondary/50">
@@ -202,19 +297,19 @@ function Page() {
               Vous envisagez de vendre ?
             </div>
             <h2 className="mt-4 font-display text-4xl leading-tight md:text-6xl">
-              Obtenez une première lecture claire de votre bien.
+              Obtenez une première estimation indicative.
             </h2>
             <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
-              Décrivez votre maison ou appartement en quelques étapes. Un
-              conseiller vous rappelle ensuite pour préparer une estimation
-              réaliste, locale et argumentée.
+              Répondez à quelques questions. Vous obtenez une première
+              fourchette de prix, puis un conseiller vous rappelle pour
+              l’affiner avec les ventes récentes du secteur.
             </p>
             <div className="mt-8">
               <Link
                 to={agencyConfig.navigation.primaryCta.to}
                 className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
               >
-                {agencyConfig.navigation.primaryCta.label}
+                Démarrer mon estimation
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </div>
@@ -257,7 +352,7 @@ function Page() {
                   to="/diagnostic"
                   className="inline-flex justify-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
                 >
-                  Estimer mon bien
+                  Démarrer mon estimation
                 </Link>
                 <a
                   href={agencyConfig.contact.phoneHref}
@@ -277,8 +372,13 @@ function Page() {
             Tranquillité
           </div>
           <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
-            Une expérience pensée pour votre tranquillité.
+            Ne signez plus un mandat pour attendre dans le vide.
           </h2>
+          <p className="mt-5 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
+            Avec Signature Immobilier, chaque étape importante est visible
+            depuis votre espace vendeur : visites, retours, documents et
+            progression de la vente.
+          </p>
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
