@@ -9,23 +9,65 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VendeurRouteImport } from './routes/vendeur'
+import { Route as SellerDashboardRouteImport } from './routes/seller-dashboard'
 import { Route as ResultatRouteImport } from './routes/resultat'
+import { Route as RegisterRouteImport } from './routes/register'
+import { Route as MonSuiviRouteImport } from './routes/mon-suivi'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as EspaceVendeurRouteImport } from './routes/espace-vendeur'
+import { Route as EspaceSignatureRouteImport } from './routes/espace-signature'
 import { Route as DiagnosticRouteImport } from './routes/diagnostic'
 import { Route as DemoRouteImport } from './routes/demo'
+import { Route as AgentDashboardRouteImport } from './routes/agent-dashboard'
+import { Route as AgentRouteImport } from './routes/agent'
+import { Route as AdminAgenceRouteImport } from './routes/admin-agence'
+import { Route as ActivationVendeurRouteImport } from './routes/activation-vendeur'
+import { Route as ActivationPatronRouteImport } from './routes/activation-patron'
+import { Route as ActivationAgentRouteImport } from './routes/activation-agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
 import { Route as AgenceCompteRenduRouteImport } from './routes/agence.compte-rendu'
 import { Route as AgenceIdRouteImport } from './routes/agence.$id'
 
+const VendeurRoute = VendeurRouteImport.update({
+  id: '/vendeur',
+  path: '/vendeur',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SellerDashboardRoute = SellerDashboardRouteImport.update({
+  id: '/seller-dashboard',
+  path: '/seller-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ResultatRoute = ResultatRouteImport.update({
   id: '/resultat',
   path: '/resultat',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RegisterRoute = RegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MonSuiviRoute = MonSuiviRouteImport.update({
+  id: '/mon-suivi',
+  path: '/mon-suivi',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EspaceVendeurRoute = EspaceVendeurRouteImport.update({
   id: '/espace-vendeur',
   path: '/espace-vendeur',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EspaceSignatureRoute = EspaceSignatureRouteImport.update({
+  id: '/espace-signature',
+  path: '/espace-signature',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DiagnosticRoute = DiagnosticRouteImport.update({
@@ -36,6 +78,36 @@ const DiagnosticRoute = DiagnosticRouteImport.update({
 const DemoRoute = DemoRouteImport.update({
   id: '/demo',
   path: '/demo',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentDashboardRoute = AgentDashboardRouteImport.update({
+  id: '/agent-dashboard',
+  path: '/agent-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentRoute = AgentRouteImport.update({
+  id: '/agent',
+  path: '/agent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAgenceRoute = AdminAgenceRouteImport.update({
+  id: '/admin-agence',
+  path: '/admin-agence',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivationVendeurRoute = ActivationVendeurRouteImport.update({
+  id: '/activation-vendeur',
+  path: '/activation-vendeur',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivationPatronRoute = ActivationPatronRouteImport.update({
+  id: '/activation-patron',
+  path: '/activation-patron',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ActivationAgentRoute = ActivationAgentRouteImport.update({
+  id: '/activation-agent',
+  path: '/activation-agent',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -61,20 +133,44 @@ const AgenceIdRoute = AgenceIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/activation-agent': typeof ActivationAgentRoute
+  '/activation-patron': typeof ActivationPatronRoute
+  '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin-agence': typeof AdminAgenceRoute
+  '/agent': typeof AgentRoute
+  '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
+  '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
+  '/login': typeof LoginRoute
+  '/mon-suivi': typeof MonSuiviRoute
+  '/register': typeof RegisterRoute
   '/resultat': typeof ResultatRoute
+  '/seller-dashboard': typeof SellerDashboardRoute
+  '/vendeur': typeof VendeurRoute
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/activation-agent': typeof ActivationAgentRoute
+  '/activation-patron': typeof ActivationPatronRoute
+  '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin-agence': typeof AdminAgenceRoute
+  '/agent': typeof AgentRoute
+  '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
+  '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
+  '/login': typeof LoginRoute
+  '/mon-suivi': typeof MonSuiviRoute
+  '/register': typeof RegisterRoute
   '/resultat': typeof ResultatRoute
+  '/seller-dashboard': typeof SellerDashboardRoute
+  '/vendeur': typeof VendeurRoute
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence': typeof AgenceIndexRoute
@@ -82,10 +178,22 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/activation-agent': typeof ActivationAgentRoute
+  '/activation-patron': typeof ActivationPatronRoute
+  '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin-agence': typeof AdminAgenceRoute
+  '/agent': typeof AgentRoute
+  '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
+  '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
+  '/login': typeof LoginRoute
+  '/mon-suivi': typeof MonSuiviRoute
+  '/register': typeof RegisterRoute
   '/resultat': typeof ResultatRoute
+  '/seller-dashboard': typeof SellerDashboardRoute
+  '/vendeur': typeof VendeurRoute
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
@@ -94,30 +202,66 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/activation-agent'
+    | '/activation-patron'
+    | '/activation-vendeur'
+    | '/admin-agence'
+    | '/agent'
+    | '/agent-dashboard'
     | '/demo'
     | '/diagnostic'
+    | '/espace-signature'
     | '/espace-vendeur'
+    | '/login'
+    | '/mon-suivi'
+    | '/register'
     | '/resultat'
+    | '/seller-dashboard'
+    | '/vendeur'
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/activation-agent'
+    | '/activation-patron'
+    | '/activation-vendeur'
+    | '/admin-agence'
+    | '/agent'
+    | '/agent-dashboard'
     | '/demo'
     | '/diagnostic'
+    | '/espace-signature'
     | '/espace-vendeur'
+    | '/login'
+    | '/mon-suivi'
+    | '/register'
     | '/resultat'
+    | '/seller-dashboard'
+    | '/vendeur'
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence'
   id:
     | '__root__'
     | '/'
+    | '/activation-agent'
+    | '/activation-patron'
+    | '/activation-vendeur'
+    | '/admin-agence'
+    | '/agent'
+    | '/agent-dashboard'
     | '/demo'
     | '/diagnostic'
+    | '/espace-signature'
     | '/espace-vendeur'
+    | '/login'
+    | '/mon-suivi'
+    | '/register'
     | '/resultat'
+    | '/seller-dashboard'
+    | '/vendeur'
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
@@ -125,10 +269,22 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ActivationAgentRoute: typeof ActivationAgentRoute
+  ActivationPatronRoute: typeof ActivationPatronRoute
+  ActivationVendeurRoute: typeof ActivationVendeurRoute
+  AdminAgenceRoute: typeof AdminAgenceRoute
+  AgentRoute: typeof AgentRoute
+  AgentDashboardRoute: typeof AgentDashboardRoute
   DemoRoute: typeof DemoRoute
   DiagnosticRoute: typeof DiagnosticRoute
+  EspaceSignatureRoute: typeof EspaceSignatureRoute
   EspaceVendeurRoute: typeof EspaceVendeurRoute
+  LoginRoute: typeof LoginRoute
+  MonSuiviRoute: typeof MonSuiviRoute
+  RegisterRoute: typeof RegisterRoute
   ResultatRoute: typeof ResultatRoute
+  SellerDashboardRoute: typeof SellerDashboardRoute
+  VendeurRoute: typeof VendeurRoute
   AgenceIdRoute: typeof AgenceIdRoute
   AgenceCompteRenduRoute: typeof AgenceCompteRenduRoute
   AgenceIndexRoute: typeof AgenceIndexRoute
@@ -136,6 +292,20 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vendeur': {
+      id: '/vendeur'
+      path: '/vendeur'
+      fullPath: '/vendeur'
+      preLoaderRoute: typeof VendeurRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/seller-dashboard': {
+      id: '/seller-dashboard'
+      path: '/seller-dashboard'
+      fullPath: '/seller-dashboard'
+      preLoaderRoute: typeof SellerDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/resultat': {
       id: '/resultat'
       path: '/resultat'
@@ -143,11 +313,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ResultatRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/register': {
+      id: '/register'
+      path: '/register'
+      fullPath: '/register'
+      preLoaderRoute: typeof RegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mon-suivi': {
+      id: '/mon-suivi'
+      path: '/mon-suivi'
+      fullPath: '/mon-suivi'
+      preLoaderRoute: typeof MonSuiviRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/espace-vendeur': {
       id: '/espace-vendeur'
       path: '/espace-vendeur'
       fullPath: '/espace-vendeur'
       preLoaderRoute: typeof EspaceVendeurRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/espace-signature': {
+      id: '/espace-signature'
+      path: '/espace-signature'
+      fullPath: '/espace-signature'
+      preLoaderRoute: typeof EspaceSignatureRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/diagnostic': {
@@ -162,6 +360,48 @@ declare module '@tanstack/react-router' {
       path: '/demo'
       fullPath: '/demo'
       preLoaderRoute: typeof DemoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-dashboard': {
+      id: '/agent-dashboard'
+      path: '/agent-dashboard'
+      fullPath: '/agent-dashboard'
+      preLoaderRoute: typeof AgentDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent': {
+      id: '/agent'
+      path: '/agent'
+      fullPath: '/agent'
+      preLoaderRoute: typeof AgentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin-agence': {
+      id: '/admin-agence'
+      path: '/admin-agence'
+      fullPath: '/admin-agence'
+      preLoaderRoute: typeof AdminAgenceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activation-vendeur': {
+      id: '/activation-vendeur'
+      path: '/activation-vendeur'
+      fullPath: '/activation-vendeur'
+      preLoaderRoute: typeof ActivationVendeurRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activation-patron': {
+      id: '/activation-patron'
+      path: '/activation-patron'
+      fullPath: '/activation-patron'
+      preLoaderRoute: typeof ActivationPatronRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/activation-agent': {
+      id: '/activation-agent'
+      path: '/activation-agent'
+      fullPath: '/activation-agent'
+      preLoaderRoute: typeof ActivationAgentRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -197,10 +437,22 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ActivationAgentRoute: ActivationAgentRoute,
+  ActivationPatronRoute: ActivationPatronRoute,
+  ActivationVendeurRoute: ActivationVendeurRoute,
+  AdminAgenceRoute: AdminAgenceRoute,
+  AgentRoute: AgentRoute,
+  AgentDashboardRoute: AgentDashboardRoute,
   DemoRoute: DemoRoute,
   DiagnosticRoute: DiagnosticRoute,
+  EspaceSignatureRoute: EspaceSignatureRoute,
   EspaceVendeurRoute: EspaceVendeurRoute,
+  LoginRoute: LoginRoute,
+  MonSuiviRoute: MonSuiviRoute,
+  RegisterRoute: RegisterRoute,
   ResultatRoute: ResultatRoute,
+  SellerDashboardRoute: SellerDashboardRoute,
+  VendeurRoute: VendeurRoute,
   AgenceIdRoute: AgenceIdRoute,
   AgenceCompteRenduRoute: AgenceCompteRenduRoute,
   AgenceIndexRoute: AgenceIndexRoute,
@@ -208,3 +460,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

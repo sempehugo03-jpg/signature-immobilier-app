@@ -19,7 +19,10 @@ export const Route = createFileRoute("/resultat")({
   head: () => ({
     meta: [
       { title: "Votre pré-diagnostic vendeur — Signature Immobilier" },
-      { name: "description", content: "Analyse personnalisée de votre projet de vente." },
+      {
+        name: "description",
+        content: "Analyse personnalisée de votre projet de vente.",
+      },
     ],
   }),
   component: Page,
@@ -46,11 +49,14 @@ function Page() {
           </div>
           <h1 className="mt-3 font-display text-3xl md:text-5xl">
             Votre pré-diagnostic vendeur est prêt
-            {prenom && <span className="text-muted-foreground">, {prenom}</span>}
+            {prenom && (
+              <span className="text-muted-foreground">, {prenom}</span>
+            )}
           </h1>
           <p className="mt-4 text-muted-foreground max-w-2xl mx-auto">
-            Voici une première lecture intelligente de votre projet. Un conseiller pourra
-            affiner cette analyse lors d'un échange de 15 minutes.
+            Voici une première lecture intelligente de votre projet. Un
+            conseiller pourra affiner cette analyse lors d'un échange de 15
+            minutes.
           </p>
         </div>
 
@@ -60,7 +66,10 @@ function Page() {
             <div className="text-xs uppercase tracking-[0.25em] opacity-70">
               Score de sérénité de vente
             </div>
-            <div className="mt-4 font-display text-6xl">{score}<span className="text-3xl opacity-60">/100</span></div>
+            <div className="mt-4 font-display text-6xl">
+              {score}
+              <span className="text-3xl opacity-60">/100</span>
+            </div>
             <div className="mt-5 h-1.5 rounded-full bg-primary-foreground/15 overflow-hidden">
               <div className="h-full bg-gold" style={{ width: `${score}%` }} />
             </div>
@@ -75,11 +84,12 @@ function Page() {
               Synthèse
             </div>
             <p className="mt-3 leading-relaxed text-foreground/90">
-              Votre projet présente de <strong>bons fondamentaux</strong>. Les éléments à
-              sécuriser concernent principalement <strong>le prix de départ</strong> et la
-              <strong> qualité de présentation du bien</strong>. Un accompagnement structuré
-              permet de réduire significativement le délai de vente et d'éviter une
-              négociation excessive.
+              Votre projet présente de <strong>bons fondamentaux</strong>. Les
+              éléments à sécuriser concernent principalement{" "}
+              <strong>le prix de départ</strong> et la
+              <strong> qualité de présentation du bien</strong>. Un
+              accompagnement structuré permet de réduire significativement le
+              délai de vente et d'éviter une négociation excessive.
             </p>
           </div>
         </div>
@@ -128,14 +138,41 @@ function Page() {
           </h2>
           <div className="mt-7 grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {[
-              { i: TrendingUp, t: "Fourchette de prix réaliste", d: "Argumentée par les ventes comparables." },
-              { i: Users, t: "Analyse de la concurrence locale", d: "Les biens en vente actuellement sur votre secteur." },
-              { i: Camera, t: "Conseils de mise en valeur", d: "Home-staging, photos, ordre des visites." },
-              { i: Megaphone, t: "Plan de diffusion", d: "Canaux adaptés à votre cible acheteur." },
-              { i: FileText, t: "Liste des documents nécessaires", d: "Tout ce qui doit être réuni avant la mise en vente." },
-              { i: Target, t: "Stratégie de négociation", d: "Plancher, marge, posture face aux offres." },
+              {
+                i: TrendingUp,
+                t: "Fourchette de prix réaliste",
+                d: "Argumentée par les ventes comparables.",
+              },
+              {
+                i: Users,
+                t: "Analyse de la concurrence locale",
+                d: "Les biens en vente actuellement sur votre secteur.",
+              },
+              {
+                i: Camera,
+                t: "Conseils de mise en valeur",
+                d: "Home-staging, photos, ordre des visites.",
+              },
+              {
+                i: Megaphone,
+                t: "Plan de diffusion",
+                d: "Canaux adaptés à votre cible acheteur.",
+              },
+              {
+                i: FileText,
+                t: "Liste des documents nécessaires",
+                d: "Tout ce qui doit être réuni avant la mise en vente.",
+              },
+              {
+                i: Target,
+                t: "Stratégie de négociation",
+                d: "Plancher, marge, posture face aux offres.",
+              },
             ].map((b) => (
-              <div key={b.t} className="rounded-xl bg-card border border-border p-5">
+              <div
+                key={b.t}
+                className="rounded-xl bg-card border border-border p-5"
+              >
                 <b.i className="h-5 w-5 text-gold" />
                 <div className="mt-3 font-medium">{b.t}</div>
                 <div className="mt-1 text-sm text-muted-foreground">{b.d}</div>
@@ -152,10 +189,10 @@ function Page() {
               Réserver un appel avec un conseiller
             </a>
             <Link
-              to="/espace-vendeur"
+              to="/mon-suivi"
               className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium hover:bg-secondary"
             >
-              Accéder à mon espace vendeur
+              Accéder à Mon suivi
             </Link>
           </div>
         </div>
@@ -181,13 +218,17 @@ function Block({
     tone === "danger"
       ? "text-destructive"
       : tone === "warn"
-      ? "text-gold"
-      : "text-primary";
+        ? "text-gold"
+        : "text-primary";
   return (
     <div className="rounded-2xl border border-border bg-card p-6">
       <Icon className={`h-5 w-5 ${toneClass}`} />
       <div className="mt-3 font-display text-xl">{title}</div>
-      {body && <p className="mt-2 text-sm text-muted-foreground leading-relaxed">{body}</p>}
+      {body && (
+        <p className="mt-2 text-sm text-muted-foreground leading-relaxed">
+          {body}
+        </p>
+      )}
       {list && (
         <ul className="mt-3 space-y-1.5 text-sm text-muted-foreground">
           {list.map((l) => (

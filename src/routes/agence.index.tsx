@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ProtectedRoute } from "@/components/protected-route";
 import { SiteLayout } from "@/components/site-layout";
 import { fakeProspects, listDiagnostics } from "@/lib/demo-store";
 import { useEffect, useState } from "react";
@@ -18,11 +19,22 @@ export const Route = createFileRoute("/agence/")({
   head: () => ({
     meta: [
       { title: "Tableau de bord agence — Signature Immobilier" },
-      { name: "description", content: "Vue d'ensemble des prospects vendeurs." },
+      {
+        name: "description",
+        content: "Vue d'ensemble des prospects vendeurs.",
+      },
     ],
   }),
-  component: Page,
+  component: AgenceIndexRoute,
 });
+
+function AgenceIndexRoute() {
+  return (
+    <ProtectedRoute role="agent">
+      <Page />
+    </ProtectedRoute>
+  );
+}
 
 function Page() {
   const [extra, setExtra] = useState<number>(0);
@@ -86,7 +98,9 @@ function Page() {
                     <div className="font-medium">
                       {p.prenom} {p.nom}
                     </div>
-                    <div className="text-xs text-muted-foreground">{p.ville}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {p.ville}
+                    </div>
                   </div>
                 </div>
                 <Badge tone={p.score}>{label(p.score)}</Badge>
@@ -101,7 +115,9 @@ function Page() {
 
               <div className="mt-5 pt-4 border-t border-border flex items-center justify-between">
                 <div className="text-xs">
-                  <div className="text-muted-foreground">Action recommandée</div>
+                  <div className="text-muted-foreground">
+                    Action recommandée
+                  </div>
                   <div className="font-medium mt-0.5">{p.action}</div>
                 </div>
                 <PhoneCall className="h-4 w-4 text-gold" />
@@ -139,7 +155,11 @@ function Stat({
     <div className="rounded-xl border border-border bg-card p-4">
       <Icon
         className={`h-4 w-4 ${
-          tone === "gold" ? "text-gold" : tone === "danger" ? "text-destructive" : "text-muted-foreground"
+          tone === "gold"
+            ? "text-gold"
+            : tone === "danger"
+              ? "text-destructive"
+              : "text-muted-foreground"
         }`}
       />
       <div className="mt-3 font-display text-3xl">{k}</div>
@@ -150,30 +170,40 @@ function Stat({
 function Row({ k, v }: { k: string; v: string }) {
   return (
     <div>
-      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">{k}</div>
+      <div className="text-[11px] uppercase tracking-wider text-muted-foreground">
+        {k}
+      </div>
       <div className="mt-0.5">{v}</div>
     </div>
   );
 }
-function Badge({ tone, children }: { tone: string; children: React.ReactNode }) {
+function Badge({
+  tone,
+  children,
+}: {
+  tone: string;
+  children: React.ReactNode;
+}) {
   const cls =
     tone === "tres-chaud"
       ? "bg-destructive/15 text-destructive border-destructive/30"
       : tone === "chaud"
-      ? "bg-gold/20 text-foreground border-gold"
-      : tone === "tiede"
-      ? "bg-secondary text-foreground border-border"
-      : "bg-secondary text-muted-foreground border-border";
+        ? "bg-gold/20 text-foreground border-gold"
+        : tone === "tiede"
+          ? "bg-secondary text-foreground border-border"
+          : "bg-secondary text-muted-foreground border-border";
   return (
-    <span className={`text-[11px] px-2.5 py-1 rounded-full border ${cls}`}>{children}</span>
+    <span className={`text-[11px] px-2.5 py-1 rounded-full border ${cls}`}>
+      {children}
+    </span>
   );
 }
 function label(t: string) {
   return t === "tres-chaud"
     ? "Très chaud"
     : t === "chaud"
-    ? "Chaud"
-    : t === "tiede"
-    ? "Tiède"
-    : "Froid";
+      ? "Chaud"
+      : t === "tiede"
+        ? "Tiède"
+        : "Froid";
 }

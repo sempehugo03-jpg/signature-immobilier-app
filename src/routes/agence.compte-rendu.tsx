@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ProtectedRoute } from "@/components/protected-route";
 import { SiteLayout } from "@/components/site-layout";
 import { useState } from "react";
 import { ArrowLeft, Copy, FileCheck } from "lucide-react";
@@ -7,8 +8,16 @@ export const Route = createFileRoute("/agence/compte-rendu")({
   head: () => ({
     meta: [{ title: "Compte-rendu de visite — Signature Immobilier" }],
   }),
-  component: Page,
+  component: CompteRenduRoute,
 });
+
+function CompteRenduRoute() {
+  return (
+    <ProtectedRoute role="agent">
+      <Page />
+    </ProtectedRoute>
+  );
+}
 
 function Page() {
   const [form, setForm] = useState({
@@ -31,8 +40,8 @@ function Page() {
       form.financement === "oui"
         ? "validé"
         : form.financement === "non"
-        ? "non confirmé"
-        : "en cours de validation"
+          ? "non confirmé"
+          : "en cours de validation"
     }. Prochaine action : ${form.prochaine.toLowerCase()}.`;
     setResume(r);
   }
@@ -41,14 +50,18 @@ function Page() {
     <SiteLayout>
       <section className="border-b border-border bg-primary text-primary-foreground">
         <div className="mx-auto max-w-4xl px-5 md:px-8 py-10">
-          <Link to="/agence" className="inline-flex items-center gap-2 text-sm opacity-70 hover:opacity-100">
+          <Link
+            to="/agence"
+            className="inline-flex items-center gap-2 text-sm opacity-70 hover:opacity-100"
+          >
             <ArrowLeft className="h-4 w-4" /> Tableau de bord
           </Link>
           <h1 className="mt-3 font-display text-3xl md:text-4xl">
             Compte-rendu de visite
           </h1>
           <p className="mt-2 text-sm opacity-80">
-            Quelques minutes pour générer un compte-rendu professionnel à envoyer au vendeur.
+            Quelques minutes pour générer un compte-rendu professionnel à
+            envoyer au vendeur.
           </p>
         </div>
       </section>
@@ -110,7 +123,9 @@ function Page() {
           <F label="Financement validé">
             <select
               value={form.financement}
-              onChange={(e) => setForm({ ...form, financement: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, financement: e.target.value })
+              }
               className="i"
             >
               <option value="oui">Oui</option>
@@ -157,8 +172,8 @@ function Page() {
             </div>
           ) : (
             <p className="mt-4 text-sm text-muted-foreground">
-              Remplissez le formulaire puis cliquez sur « Générer ». Vous obtiendrez un texte
-              propre, prêt à être envoyé au vendeur.
+              Remplissez le formulaire puis cliquez sur « Générer ». Vous
+              obtiendrez un texte propre, prêt à être envoyé au vendeur.
             </p>
           )}
         </div>

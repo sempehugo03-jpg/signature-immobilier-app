@@ -1,230 +1,358 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { SiteLayout } from "@/components/site-layout";
-import hero from "@/assets/hero-house.jpg";
 import {
   ArrowRight,
-  ShieldCheck,
-  LineChart,
-  HeartHandshake,
-  Clock,
-  AlertTriangle,
-  Eye,
-  Phone,
+  Bell,
+  CheckCircle2,
+  FileText,
+  FolderClosed,
+  LockKeyhole,
+  MapPin,
+  Search,
 } from "lucide-react";
+import { useState } from "react";
+
+import { PropertyCard } from "@/components/property-card";
+import { PropertyDetails } from "@/components/property-details";
+import { SiteLayout } from "@/components/site-layout";
+import { agencyConfig, type Property } from "@/lib/agency-config";
 
 export const Route = createFileRoute("/")({
   head: () => ({
     meta: [
-      { title: "Signature Immobilier — Vendez avec clarté et sérénité" },
+      {
+        title: `${agencyConfig.brand.name} — Biens premium et vente transparente`,
+      },
       {
         name: "description",
         content:
-          "Diagnostic vendeur, suivi de vente en ligne et accompagnement humain. Confiez votre bien à une agence qui vous accompagne vraiment.",
+          "Découvrez les biens à vendre et demandez une estimation avec une agence premium centrée sur la transparence vendeur.",
       },
-      { property: "og:title", content: "Signature Immobilier" },
+      { property: "og:title", content: agencyConfig.brand.name },
       {
         property: "og:description",
-        content: "Vendez votre bien avec clarté, suivi et sérénité.",
+        content: agencyConfig.brand.tagline,
       },
     ],
   }),
   component: Page,
 });
 
+const reassurance = [
+  {
+    icon: Bell,
+    title: "Suivi en temps réel",
+    text: "Soyez informé à chaque nouvelle étape de votre vente.",
+  },
+  {
+    icon: FolderClosed,
+    title: "Tout au même endroit",
+    text: "Documents, visites, offres : tout est accessible facilement.",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Mises à jour importantes",
+    text: "Recevez uniquement les informations utiles pour suivre votre dossier.",
+  },
+  {
+    icon: LockKeyhole,
+    title: "Données sécurisées",
+    text: "Vos informations sont protégées et confidentielles.",
+  },
+] as const;
+
 function Page() {
+  const [selectedProperty, setSelectedProperty] = useState<Property | null>(
+    null,
+  );
+  const featuredProperty = agencyConfig.properties[0];
   return (
-    <SiteLayout>
-      {/* HERO */}
-      <section className="relative">
-        <div className="mx-auto max-w-7xl px-5 md:px-8 pt-12 md:pt-20 pb-16 md:pb-24 grid md:grid-cols-2 gap-10 md:gap-14 items-center">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1 text-xs tracking-wide text-secondary-foreground">
+    <SiteLayout variant="public">
+      <section className="relative overflow-hidden">
+        <div className="absolute inset-x-0 top-0 h-40 bg-secondary/60" />
+        <div className="relative mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 md:px-8 md:pb-24 md:pt-16 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
+          <div className="max-w-xl">
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3 py-1.5 text-xs tracking-wide text-muted-foreground shadow-sm backdrop-blur">
               <span className="h-1.5 w-1.5 rounded-full bg-gold" />
-              Agence immobilière haut de gamme
+              {agencyConfig.brand.positioning}
             </div>
-            <h1 className="mt-5 font-display text-4xl md:text-6xl leading-[1.05]">
-              Confiez votre bien à une agence qui vous{" "}
-              <span className="italic text-primary">accompagne vraiment.</span>
+            <h1 className="mt-7 font-display text-5xl leading-[0.96] tracking-normal md:text-7xl">
+              Des biens d’exception, une vente en toute transparence.
             </h1>
-            <p className="mt-5 text-base md:text-lg text-muted-foreground max-w-xl leading-relaxed">
-              Estimation, stratégie de vente, diffusion, visites, négociation, notaire :
-              suivez chaque étape de votre vente depuis un espace simple et transparent.
+            <p className="mt-6 max-w-lg text-base leading-relaxed text-muted-foreground md:text-lg">
+              Consultez les biens de l’agence, puis demandez une estimation pour
+              vendre avec un suivi clair, premium et rassurant.
             </p>
+
+            <div className="mt-8 max-w-xl rounded-full border border-border bg-card p-2 shadow-xl shadow-foreground/5">
+              <div className="flex items-center gap-3">
+                <div className="ml-3 hidden text-gold sm:block">
+                  <MapPin className="h-5 w-5" />
+                </div>
+                <input
+                  aria-label="Rechercher un bien"
+                  placeholder="Ville, quartier, code postal..."
+                  className="min-w-0 flex-1 bg-transparent px-2 py-3 text-sm outline-none placeholder:text-muted-foreground"
+                />
+                <button
+                  type="button"
+                  className="grid h-12 w-12 shrink-0 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90"
+                  aria-label="Rechercher"
+                >
+                  <Search className="h-5 w-5" />
+                </button>
+              </div>
+            </div>
+
             <div className="mt-8 flex flex-wrap gap-3">
-              <Link
-                to="/diagnostic"
-                className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 text-sm font-medium hover:bg-primary/90"
+              <a
+                href="#biens-a-vendre"
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
               >
-                Démarrer mon diagnostic vendeur
+                Voir les biens
+                <ArrowRight className="h-4 w-4" />
+              </a>
+              <Link
+                to={agencyConfig.navigation.primaryCta.to}
+                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+              >
+                {agencyConfig.navigation.primaryCta.label}
+              </Link>
+            </div>
+          </div>
+
+          {featuredProperty && (
+            <div className="relative min-h-[520px]">
+              <div className="absolute -right-10 top-8 h-64 w-64 rounded-full bg-gold/10 blur-3xl" />
+              <div className="relative overflow-hidden rounded-[2rem] bg-secondary shadow-2xl shadow-foreground/10">
+                <img
+                  src={featuredProperty.coverImage}
+                  alt={featuredProperty.title}
+                  className="h-[520px] w-full object-cover md:h-[620px]"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-foreground/45 via-transparent to-transparent" />
+                <div className="absolute bottom-5 left-5 right-5 rounded-[1.5rem] border border-white/20 bg-background/90 p-5 shadow-xl backdrop-blur md:bottom-7 md:left-7 md:right-auto md:w-[360px]">
+                  <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+                    Bien sélectionné
+                  </div>
+                  <div className="mt-3 font-display text-2xl leading-tight">
+                    {featuredProperty.title}
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
+                    <span>{featuredProperty.city}</span>
+                    <span>{featuredProperty.surface} m²</span>
+                    <span>{featuredProperty.rooms} pièces</span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-4">
+                    <div className="font-display text-3xl">
+                      {featuredProperty.price}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedProperty(featuredProperty)}
+                      className="grid h-11 w-11 place-items-center rounded-full bg-primary text-primary-foreground transition hover:bg-primary/90"
+                      aria-label={`Voir le détail de ${featuredProperty.title}`}
+                    >
+                      <ArrowRight className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+
+      <section
+        id="biens-a-vendre"
+        className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-24"
+      >
+        <div className="mb-9 flex flex-wrap items-end justify-between gap-6">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+              Biens à vendre
+            </div>
+            <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
+              Une sélection locale, claire et désirable.
+            </h2>
+          </div>
+          <a
+            href="#biens-a-vendre"
+            className="inline-flex items-center gap-2 rounded-full border border-border bg-card px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+          >
+            Voir tous les biens
+            <ArrowRight className="h-4 w-4" />
+          </a>
+        </div>
+
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {agencyConfig.properties.map((property) => (
+            <PropertyCard
+              key={property.id}
+              property={property}
+              onOpen={setSelectedProperty}
+            />
+          ))}
+        </div>
+      </section>
+
+      <section id="estimer-mon-bien" className="bg-secondary/50">
+        <div className="mx-auto grid max-w-7xl gap-12 px-5 py-16 md:px-8 md:py-24 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+          <div>
+            <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+              Vous envisagez de vendre ?
+            </div>
+            <h2 className="mt-4 font-display text-4xl leading-tight md:text-6xl">
+              Obtenez une première lecture claire de votre bien.
+            </h2>
+            <p className="mt-6 max-w-xl text-base leading-relaxed text-muted-foreground md:text-lg">
+              Décrivez votre maison ou appartement en quelques étapes. Un
+              conseiller vous rappelle ensuite pour préparer une estimation
+              réaliste, locale et argumentée.
+            </p>
+            <div className="mt-8">
+              <Link
+                to={agencyConfig.navigation.primaryCta.to}
+                className="inline-flex items-center gap-2 rounded-full bg-primary px-6 py-4 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
+              >
+                {agencyConfig.navigation.primaryCta.label}
                 <ArrowRight className="h-4 w-4" />
               </Link>
-              <Link
-                to="/espace-vendeur"
-                className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium hover:bg-secondary"
-              >
-                Voir comment fonctionne le suivi
-              </Link>
-            </div>
-            <div className="mt-10 grid grid-cols-3 gap-6 max-w-md">
-              {[
-                ["12 sem.", "Délai de vente moyen"],
-                ["+38%", "De mandats signés"],
-                ["98%", "Vendeurs informés"],
-              ].map(([k, v]) => (
-                <div key={v}>
-                  <div className="font-display text-2xl">{k}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{v}</div>
-                </div>
-              ))}
             </div>
           </div>
-          <div className="relative">
-            <div className="absolute -inset-4 bg-secondary rounded-3xl -z-10" />
-            <img
-              src={hero}
-              alt="Maison haut de gamme"
-              className="w-full h-[420px] md:h-[560px] object-cover rounded-2xl shadow-xl"
-            />
-            <div className="absolute -bottom-5 -left-5 hidden md:block bg-card border border-border rounded-xl p-4 shadow-lg max-w-[230px]">
-              <div className="text-xs text-muted-foreground">Score de sérénité</div>
-              <div className="font-display text-3xl mt-1">68/100</div>
-              <div className="mt-2 h-1.5 rounded-full bg-secondary overflow-hidden">
-                <div className="h-full w-[68%] bg-gold" />
+
+          <div className="relative mx-auto w-full max-w-md">
+            <div className="relative rounded-[2rem] border border-border bg-card p-6 shadow-2xl shadow-foreground/10">
+              <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+                Demande de rappel
               </div>
-              <div className="text-[11px] text-muted-foreground mt-2">
-                Diagnostic vendeur en 3 min
+              <h3 className="mt-3 font-display text-3xl">
+                Un conseiller vous accompagne.
+              </h3>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                Vous transmettez les informations essentielles. L’agence vous
+                rappelle pour affiner la valeur, le calendrier et la stratégie
+                de vente.
+              </p>
+
+              <div className="mt-6 space-y-3">
+                <PhoneRow
+                  icon={CheckCircle2}
+                  title="Analyse locale"
+                  value="Prix, quartier, concurrence"
+                />
+                <PhoneRow
+                  icon={FileText}
+                  title="Projet vendeur"
+                  value="Délai, priorité, situation"
+                />
+                <PhoneRow
+                  icon={Bell}
+                  title="Rappel agence"
+                  value="Sans création de compte public"
+                />
+              </div>
+
+              <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                <Link
+                  to="/diagnostic"
+                  className="inline-flex justify-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                >
+                  Estimer mon bien
+                </Link>
+                <a
+                  href={agencyConfig.contact.phoneHref}
+                  className="inline-flex justify-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+                >
+                  Appeler l’agence
+                </a>
               </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* PROBLEME */}
-      <section className="bg-secondary/50 border-y border-border">
-        <div className="mx-auto max-w-7xl px-5 md:px-8 py-16 md:py-20">
-          <div className="max-w-2xl">
-            <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-              Le constat
-            </div>
-            <h2 className="mt-3 font-display text-3xl md:text-4xl">
-              Vendre son bien ne devrait plus être source d'inquiétude.
-            </h2>
-            <p className="mt-4 text-muted-foreground">
-              La plupart des propriétaires partagent les mêmes peurs au moment de confier
-              leur bien :
-            </p>
-          </div>
-          <div className="mt-10 grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-            {[
-              "Mal estimer mon bien",
-              "Perdre du temps",
-              "Ne pas avoir de nouvelles de l'agence",
-              "Ne pas savoir ce qui est fait pour vendre",
-              "Accepter une mauvaise offre",
-            ].map((t) => (
-              <div
-                key={t}
-                className="rounded-xl bg-card border border-border p-5 flex items-start gap-3"
-              >
-                <AlertTriangle className="h-4 w-4 text-gold shrink-0 mt-0.5" />
-                <div className="text-sm">{t}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* PROMESSE + bénéfices */}
-      <section className="mx-auto max-w-7xl px-5 md:px-8 py-20 md:py-28">
+      <section className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-24">
         <div className="max-w-3xl">
-          <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
-            Notre promesse
+          <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
+            Tranquillité
           </div>
-          <h2 className="mt-3 font-display text-3xl md:text-5xl leading-tight">
-            Chez Signature Immobilier, vous ne signez pas un mandat dans le flou.
+          <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
+            Une expérience pensée pour votre tranquillité.
           </h2>
-          <p className="mt-4 text-muted-foreground text-lg">
-            Vous êtes accompagné, informé et suivi à chaque étape — du premier rendez-vous
-            jusqu'à la signature chez le notaire.
-          </p>
         </div>
 
-        <div className="mt-14 grid md:grid-cols-3 gap-5">
-          {[
-            {
-              icon: LineChart,
-              title: "Diagnostic vendeur personnalisé",
-              body: "Une analyse claire de votre projet : potentiel du bien, points à sécuriser, recommandations concrètes.",
-            },
-            {
-              icon: Eye,
-              title: "Suivi clair de la vente",
-              body: "Une timeline en ligne, un compte-rendu après chaque visite, et un interlocuteur unique.",
-            },
-            {
-              icon: HeartHandshake,
-              title: "Accompagnement humain",
-              body: "Estimation, négociation, compromis, notaire : on reste à vos côtés jusqu'à la signature.",
-            },
-          ].map((b) => (
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {reassurance.map((item) => (
             <div
-              key={b.title}
-              className="group rounded-2xl border border-border bg-card p-7 hover:shadow-lg transition-shadow"
+              key={item.title}
+              className="rounded-2xl border border-border bg-card p-6 shadow-sm"
             >
-              <b.icon className="h-6 w-6 text-gold" />
-              <div className="mt-5 font-display text-xl">{b.title}</div>
-              <p className="mt-3 text-sm text-muted-foreground leading-relaxed">{b.body}</p>
+              <div className="grid h-11 w-11 place-items-center rounded-full bg-secondary text-gold">
+                <item.icon className="h-5 w-5" />
+              </div>
+              <div className="mt-6 font-display text-xl">{item.title}</div>
+              <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                {item.text}
+              </p>
             </div>
           ))}
         </div>
       </section>
 
-      {/* QUOTE */}
-      <section className="bg-primary text-primary-foreground">
-        <div className="mx-auto max-w-5xl px-5 md:px-8 py-20 md:py-28 text-center">
-          <div className="text-xs uppercase tracking-[0.25em] opacity-70">Notre conviction</div>
-          <p className="mt-5 font-display text-2xl md:text-4xl leading-snug">
-            “Un vendeur rassuré est un vendeur plus facile à accompagner — et un bien mieux
-            vendu.”
-          </p>
-          <div className="mt-8 h-px gold-rule mx-auto w-40" />
+      <section className="mx-auto max-w-7xl px-5 pb-20 md:px-8 md:pb-28">
+        <div className="overflow-hidden rounded-[2rem] bg-primary text-primary-foreground">
+          <div className="grid gap-8 p-8 md:grid-cols-[1fr_0.7fr] md:items-center md:p-14">
+            <div>
+              <div className="text-xs uppercase tracking-[0.25em] text-primary-foreground/60">
+                Estimation
+              </div>
+              <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
+                Votre bien mérite une stratégie claire.
+              </h2>
+              <p className="mt-5 max-w-xl text-primary-foreground/70">
+                Demandez une estimation. Un conseiller vous rappelle rapidement
+                pour échanger sur votre projet.
+              </p>
+            </div>
+            <div className="flex md:justify-end">
+              <Link
+                to={agencyConfig.navigation.primaryCta.to}
+                className="inline-flex items-center gap-2 rounded-full bg-gold px-6 py-4 text-sm font-medium text-gold-foreground transition hover:bg-gold/90"
+              >
+                {agencyConfig.navigation.primaryCta.label}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
         </div>
       </section>
 
-      {/* CTA */}
-      <section className="mx-auto max-w-7xl px-5 md:px-8 py-20">
-        <div className="rounded-3xl bg-secondary/60 border border-border p-8 md:p-14 grid md:grid-cols-[1.4fr_1fr] gap-8 items-center">
-          <div>
-            <h3 className="font-display text-3xl md:text-4xl">
-              Obtenez votre diagnostic vendeur gratuit
-            </h3>
-            <p className="mt-4 text-muted-foreground max-w-xl">
-              3 minutes, sans engagement. Recevez une première analyse claire de votre
-              projet : potentiel, risques et recommandations.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-4 text-sm">
-              <div className="inline-flex items-center gap-2 text-muted-foreground">
-                <Clock className="h-4 w-4 text-gold" /> 3 min
-              </div>
-              <div className="inline-flex items-center gap-2 text-muted-foreground">
-                <ShieldCheck className="h-4 w-4 text-gold" /> Données confidentielles
-              </div>
-              <div className="inline-flex items-center gap-2 text-muted-foreground">
-                <Phone className="h-4 w-4 text-gold" /> Rappel sous 24h
-              </div>
-            </div>
-          </div>
-          <div className="flex md:justify-end">
-            <Link
-              to="/diagnostic"
-              className="inline-flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-6 py-4 text-sm font-medium hover:bg-primary/90"
-            >
-              Démarrer mon diagnostic
-              <ArrowRight className="h-4 w-4" />
-            </Link>
-          </div>
-        </div>
-      </section>
+      <PropertyDetails
+        property={selectedProperty}
+        onClose={() => setSelectedProperty(null)}
+      />
     </SiteLayout>
+  );
+}
+
+function PhoneRow({
+  icon: Icon,
+  title,
+  value,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  title: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-border bg-card p-4">
+      <div className="grid h-10 w-10 place-items-center rounded-full bg-secondary text-gold">
+        <Icon className="h-4 w-4" />
+      </div>
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground">{title}</div>
+        <div className="truncate text-sm font-medium">{value}</div>
+      </div>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { ProtectedRoute } from "@/components/protected-route";
 import { SiteLayout } from "@/components/site-layout";
 import { useEffect, useState } from "react";
 import { getCurrentDiagnostic, type Diagnostic } from "@/lib/demo-store";
@@ -21,11 +22,22 @@ export const Route = createFileRoute("/espace-vendeur")({
   head: () => ({
     meta: [
       { title: "Mon espace vendeur — Signature Immobilier" },
-      { name: "description", content: "Suivez chaque étape de la vente de votre bien." },
+      {
+        name: "description",
+        content: "Suivez chaque étape de la vente de votre bien.",
+      },
     ],
   }),
-  component: Page,
+  component: EspaceVendeurRoute,
 });
+
+function EspaceVendeurRoute() {
+  return (
+    <ProtectedRoute role="seller">
+      <Page />
+    </ProtectedRoute>
+  );
+}
 
 const STEPS = [
   { t: "Diagnostic du bien", s: "termine", icon: CheckCircle2 },
@@ -64,7 +76,9 @@ function Page() {
   }, []);
 
   const prenom = diag?.contact.prenom || "Vendeur";
-  const bien = diag ? `${diag.bien.type || "Bien"} ${diag.bien.surface ? diag.bien.surface + " m²" : ""} — ${diag.bien.ville || ""}` : "Maison 115 m² — Tarbes";
+  const bien = diag
+    ? `${diag.bien.type || "Bien"} ${diag.bien.surface ? diag.bien.surface + " m²" : ""} — ${diag.bien.ville || ""}`
+    : "Maison 115 m² — Tarbes";
 
   return (
     <SiteLayout>
@@ -81,7 +95,9 @@ function Page() {
           </div>
           <div className="flex items-center gap-3">
             <div className="rounded-xl bg-card border border-border px-5 py-3 text-sm">
-              <div className="text-xs text-muted-foreground">Conseiller dédié</div>
+              <div className="text-xs text-muted-foreground">
+                Conseiller dédié
+              </div>
               <div className="font-medium">Sophie Martin</div>
             </div>
             <a
@@ -111,8 +127,8 @@ function Page() {
                     step.s === "termine"
                       ? "bg-primary text-primary-foreground border-primary"
                       : step.s === "planifier"
-                      ? "bg-gold text-gold-foreground border-gold"
-                      : "bg-background text-muted-foreground border-border"
+                        ? "bg-gold text-gold-foreground border-gold"
+                        : "bg-background text-muted-foreground border-border"
                   }`}
                 >
                   {step.s === "termine" ? (
@@ -125,7 +141,9 @@ function Page() {
                 </div>
                 <div className="rounded-xl bg-card border border-border px-4 py-3 flex items-center justify-between gap-3">
                   <div>
-                    <div className="text-xs text-muted-foreground">Étape {i + 1}</div>
+                    <div className="text-xs text-muted-foreground">
+                      Étape {i + 1}
+                    </div>
                     <div className="font-medium">{step.t}</div>
                   </div>
                   <span
@@ -133,17 +151,17 @@ function Page() {
                       step.s === "termine"
                         ? "bg-primary text-primary-foreground"
                         : step.s === "planifier"
-                        ? "bg-gold/20 text-foreground border border-gold"
-                        : "bg-secondary text-muted-foreground"
+                          ? "bg-gold/20 text-foreground border border-gold"
+                          : "bg-secondary text-muted-foreground"
                     }`}
                   >
                     {step.s === "termine"
                       ? "Terminé"
                       : step.s === "planifier"
-                      ? "À planifier"
-                      : step.s === "attente"
-                      ? "En attente"
-                      : "À venir"}
+                        ? "À planifier"
+                        : step.s === "attente"
+                          ? "En attente"
+                          : "À venir"}
                   </span>
                 </div>
               </li>
@@ -164,7 +182,10 @@ function Page() {
                 "Pensez à préparer votre taxe foncière et vos diagnostics.",
                 "Votre bien présente de bons atouts, mais quelques éléments doivent être vérifiés avant la mise en vente.",
               ].map((m, i) => (
-                <div key={i} className="text-sm bg-secondary/60 rounded-lg p-3 leading-relaxed">
+                <div
+                  key={i}
+                  className="text-sm bg-secondary/60 rounded-lg p-3 leading-relaxed"
+                >
                   {m}
                 </div>
               ))}
@@ -189,7 +210,11 @@ function Page() {
                       }
                       className="mt-1"
                     />
-                    <span className={checked[d] ? "text-muted-foreground line-through" : ""}>
+                    <span
+                      className={
+                        checked[d] ? "text-muted-foreground line-through" : ""
+                      }
+                    >
                       {d}
                     </span>
                   </label>
@@ -197,7 +222,8 @@ function Page() {
               ))}
             </ul>
             <div className="mt-3 text-xs text-muted-foreground">
-              {Object.values(checked).filter(Boolean).length}/{DOCS.length} documents prêts
+              {Object.values(checked).filter(Boolean).length}/{DOCS.length}{" "}
+              documents prêts
             </div>
           </div>
 
@@ -227,7 +253,10 @@ function Page() {
               "Négociation des offres",
               "Suivi administratif et notaire",
             ].map((t) => (
-              <div key={t} className="rounded-xl bg-card border border-border p-5 text-sm">
+              <div
+                key={t}
+                className="rounded-xl bg-card border border-border p-5 text-sm"
+              >
                 <div className="h-1 w-8 bg-gold rounded-full mb-3" />
                 {t}
               </div>

@@ -1,6 +1,8 @@
 import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { ProtectedRoute } from "@/components/protected-route";
 import { SiteLayout } from "@/components/site-layout";
 import { fakeProspects } from "@/lib/demo-store";
+import { SellerSpaceCreator } from "@/components/seller-space-creator";
 import {
   ArrowLeft,
   ClipboardCopy,
@@ -29,8 +31,16 @@ export const Route = createFileRoute("/agence/$id")({
       </div>
     </SiteLayout>
   ),
-  component: Page,
+  component: AgenceProspectRoute,
 });
+
+function AgenceProspectRoute() {
+  return (
+    <ProtectedRoute role="agent">
+      <Page />
+    </ProtectedRoute>
+  );
+}
 
 function Page() {
   const p = Route.useLoaderData();
@@ -141,7 +151,8 @@ function Page() {
             <div>
               <div className="font-medium">Bon à savoir</div>
               <div className="text-sm text-muted-foreground">
-                Ce prospect a déjà reçu son pré-diagnostic. Son espace vendeur est actif.
+                Ce prospect a déjà reçu son pré-diagnostic. Son espace vendeur
+                est actif.
               </div>
             </div>
           </div>
@@ -151,6 +162,19 @@ function Page() {
           >
             Voir l'espace vendeur →
           </Link>
+        </div>
+
+        <div className="lg:col-span-3">
+          <SellerSpaceCreator
+            propertyId={p.id}
+            propertyTitle={p.bien}
+            initialSeller={{
+              firstName: p.prenom,
+              lastName: p.nom,
+              email: "",
+              phone: "",
+            }}
+          />
         </div>
       </section>
     </SiteLayout>
@@ -172,7 +196,9 @@ function Card({
         highlight ? "border-gold bg-gold/5" : "border-border bg-card"
       }`}
     >
-      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">{title}</div>
+      <div className="text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        {title}
+      </div>
       <div className="mt-3 space-y-2">{children}</div>
     </div>
   );

@@ -1,0 +1,49 @@
+import { createClient } from "@supabase/supabase-js";
+
+export type UserRole = "owner" | "agency_admin" | "agent" | "seller";
+
+export type Profile = {
+  id: string;
+  email: string;
+  role: UserRole;
+  created_at?: string;
+};
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error("Missing Supabase environment variables");
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+
+export function isUserRole(value: unknown): value is UserRole {
+  return (
+    value === "owner" ||
+    value === "agency_admin" ||
+    value === "seller" ||
+    value === "agent"
+  );
+}
+
+export function normalizeUserRole(value: unknown): UserRole | null {
+  if (isUserRole(value)) return value;
+  if (value === "vendeur") return "seller";
+  if (value === "agent_immobilier") return "agent";
+  return null;
+}
+
+export function getRoleLabel(role: UserRole) {
+  if (role === "owner") return "Owner";
+  if (role === "agency_admin") return "Patron d’agence";
+  if (role === "agent") return "Agent immobilier";
+  return "Vendeur";
+}
+
+export function getDashboardPath(role: UserRole) {
+  if (role === "owner") return "/espace-signature";
+  if (role === "agency_admin") return "/admin-agence";
+  if (role === "agent") return "/agent";
+  return "/vendeur";
+}
