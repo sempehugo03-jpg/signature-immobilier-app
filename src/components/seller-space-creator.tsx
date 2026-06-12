@@ -8,6 +8,7 @@ import {
   openSellerSpaceGmail,
   type SellerSpaceCreationResult,
 } from "@/lib/seller-space";
+import { buildPublicAppUrl } from "@/lib/invitation-email";
 
 type SellerSpaceCreatorProps = {
   propertyId: string;
@@ -37,6 +38,9 @@ export function SellerSpaceCreator({
   const [submitting, setSubmitting] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
   const [gmailBlocked, setGmailBlocked] = useState(false);
+  const sellerAccessUrl =
+    result?.activationUrl ??
+    (sellerSpaceExists ? buildPublicAppUrl("/mon-suivi") : "");
   const fullName = useMemo(
     () =>
       `${result?.space.seller_first_name ?? seller.firstName} ${
@@ -78,9 +82,7 @@ export function SellerSpaceCreator({
     <section className="rounded-[24px] border border-[#e8e0d5] bg-white p-6 shadow-[0_18px_45px_rgba(17,24,39,0.04)] md:p-8">
       <div>
         <h2 className="font-display text-3xl leading-tight text-primary">
-          {sellerSpaceExists
-            ? "Renvoyer l’accès vendeur"
-            : "Créer l’espace vendeur"}
+          {sellerSpaceExists ? "Espace vendeur créé" : "Créer l’espace vendeur"}
         </h2>
         <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary/55">
           {sellerSpaceExists
@@ -137,7 +139,7 @@ export function SellerSpaceCreator({
           />
         </Field>
 
-        <div className="md:col-span-2">
+        <div className="flex flex-col gap-3 sm:flex-row md:col-span-2">
           <button
             type="submit"
             disabled={submitting}
@@ -150,6 +152,16 @@ export function SellerSpaceCreator({
                 ? "Renvoyer l’accès vendeur"
                 : "Créer l’espace vendeur"}
           </button>
+          {sellerSpaceExists && (
+            <button
+              type="button"
+              onClick={() => copy(sellerAccessUrl, "lien")}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-5 py-3 text-sm font-medium text-primary transition hover:bg-[#faf7f0] md:w-auto"
+            >
+              <Copy className="h-4 w-4" />
+              Copier le lien vendeur
+            </button>
+          )}
         </div>
       </form>
 
@@ -215,7 +227,7 @@ export function SellerSpaceCreator({
               className="inline-flex items-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-[#faf7f0]"
             >
               <Copy className="h-4 w-4" />
-              Copier le lien
+              Copier le lien vendeur
             </button>
           </div>
 

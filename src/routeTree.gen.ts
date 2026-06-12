@@ -29,6 +29,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
 import { Route as AgenceCompteRenduRouteImport } from './routes/agence.compte-rendu'
 import { Route as AgenceIdRouteImport } from './routes/agence.$id'
+import { Route as AgentBienIdRouteImport } from './routes/agent.bien.$id'
 
 const VendeurRoute = VendeurRouteImport.update({
   id: '/vendeur',
@@ -130,6 +131,11 @@ const AgenceIdRoute = AgenceIdRouteImport.update({
   path: '/agence/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentBienIdRoute = AgentBienIdRouteImport.update({
+  id: '/bien/$id',
+  path: '/bien/$id',
+  getParentRoute: () => AgentRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -137,7 +143,7 @@ export interface FileRoutesByFullPath {
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
   '/admin-agence': typeof AdminAgenceRoute
-  '/agent': typeof AgentRoute
+  '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
@@ -152,6 +158,7 @@ export interface FileRoutesByFullPath {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
+  '/agent/bien/$id': typeof AgentBienIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -159,7 +166,7 @@ export interface FileRoutesByTo {
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
   '/admin-agence': typeof AdminAgenceRoute
-  '/agent': typeof AgentRoute
+  '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
@@ -174,6 +181,7 @@ export interface FileRoutesByTo {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence': typeof AgenceIndexRoute
+  '/agent/bien/$id': typeof AgentBienIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -182,7 +190,7 @@ export interface FileRoutesById {
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
   '/admin-agence': typeof AdminAgenceRoute
-  '/agent': typeof AgentRoute
+  '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
   '/demo': typeof DemoRoute
   '/diagnostic': typeof DiagnosticRoute
@@ -197,6 +205,7 @@ export interface FileRoutesById {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
+  '/agent/bien/$id': typeof AgentBienIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -221,6 +230,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
+    | '/agent/bien/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -243,6 +253,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence'
+    | '/agent/bien/$id'
   id:
     | '__root__'
     | '/'
@@ -265,6 +276,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
+    | '/agent/bien/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -273,7 +285,7 @@ export interface RootRouteChildren {
   ActivationPatronRoute: typeof ActivationPatronRoute
   ActivationVendeurRoute: typeof ActivationVendeurRoute
   AdminAgenceRoute: typeof AdminAgenceRoute
-  AgentRoute: typeof AgentRoute
+  AgentRoute: typeof AgentRouteWithChildren
   AgentDashboardRoute: typeof AgentDashboardRoute
   DemoRoute: typeof DemoRoute
   DiagnosticRoute: typeof DiagnosticRoute
@@ -432,8 +444,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgenceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agent/bien/$id': {
+      id: '/agent/bien/$id'
+      path: '/bien/$id'
+      fullPath: '/agent/bien/$id'
+      preLoaderRoute: typeof AgentBienIdRouteImport
+      parentRoute: typeof AgentRoute
+    }
   }
 }
+
+interface AgentRouteChildren {
+  AgentBienIdRoute: typeof AgentBienIdRoute
+}
+
+const AgentRouteChildren: AgentRouteChildren = {
+  AgentBienIdRoute: AgentBienIdRoute,
+}
+
+const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
@@ -441,7 +470,7 @@ const rootRouteChildren: RootRouteChildren = {
   ActivationPatronRoute: ActivationPatronRoute,
   ActivationVendeurRoute: ActivationVendeurRoute,
   AdminAgenceRoute: AdminAgenceRoute,
-  AgentRoute: AgentRoute,
+  AgentRoute: AgentRouteWithChildren,
   AgentDashboardRoute: AgentDashboardRoute,
   DemoRoute: DemoRoute,
   DiagnosticRoute: DiagnosticRoute,
