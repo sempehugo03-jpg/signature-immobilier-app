@@ -22,14 +22,21 @@ import { Route as DemoRouteImport } from './routes/demo'
 import { Route as AgentDashboardRouteImport } from './routes/agent-dashboard'
 import { Route as AgentRouteImport } from './routes/agent'
 import { Route as AdminAgenceRouteImport } from './routes/admin-agence'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as ActivationVendeurRouteImport } from './routes/activation-vendeur'
 import { Route as ActivationPatronRouteImport } from './routes/activation-patron'
 import { Route as ActivationAgentRouteImport } from './routes/activation-agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
+import { Route as DemoAgenceSlugRouteImport } from './routes/demo-agence.$slug'
 import { Route as AgenceCompteRenduRouteImport } from './routes/agence.compte-rendu'
-import { Route as AgenceIdRouteImport } from './routes/agence.$id'
+import { Route as AgenceSlugRouteImport } from './routes/agence.$slug'
 import { Route as AgentPropertiesIdRouteImport } from './routes/agent.properties.$id'
+import { Route as AgenceSlugSettingsRouteImport } from './routes/agence.$slug.settings'
+import { Route as AgenceSlugEstimationsRouteImport } from './routes/agence.$slug.estimations'
+import { Route as AgenceSlugEstimationRouteImport } from './routes/agence.$slug.estimation'
+import { Route as AgenceSlugEquipeRouteImport } from './routes/agence.$slug.equipe'
+import { Route as AdminAgenciesSlugRouteImport } from './routes/admin.agencies.$slug'
 
 const VendeurRoute = VendeurRouteImport.update({
   id: '/vendeur',
@@ -96,6 +103,11 @@ const AdminAgenceRoute = AdminAgenceRouteImport.update({
   path: '/admin-agence',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ActivationVendeurRoute = ActivationVendeurRouteImport.update({
   id: '/activation-vendeur',
   path: '/activation-vendeur',
@@ -121,14 +133,19 @@ const AgenceIndexRoute = AgenceIndexRouteImport.update({
   path: '/agence/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoAgenceSlugRoute = DemoAgenceSlugRouteImport.update({
+  id: '/demo-agence/$slug',
+  path: '/demo-agence/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgenceCompteRenduRoute = AgenceCompteRenduRouteImport.update({
   id: '/agence/compte-rendu',
   path: '/agence/compte-rendu',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgenceIdRoute = AgenceIdRouteImport.update({
-  id: '/agence/$id',
-  path: '/agence/$id',
+const AgenceSlugRoute = AgenceSlugRouteImport.update({
+  id: '/agence/$slug',
+  path: '/agence/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentPropertiesIdRoute = AgentPropertiesIdRouteImport.update({
@@ -136,12 +153,38 @@ const AgentPropertiesIdRoute = AgentPropertiesIdRouteImport.update({
   path: '/properties/$id',
   getParentRoute: () => AgentRoute,
 } as any)
+const AgenceSlugSettingsRoute = AgenceSlugSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AgenceSlugRoute,
+} as any)
+const AgenceSlugEstimationsRoute = AgenceSlugEstimationsRouteImport.update({
+  id: '/estimations',
+  path: '/estimations',
+  getParentRoute: () => AgenceSlugRoute,
+} as any)
+const AgenceSlugEstimationRoute = AgenceSlugEstimationRouteImport.update({
+  id: '/estimation',
+  path: '/estimation',
+  getParentRoute: () => AgenceSlugRoute,
+} as any)
+const AgenceSlugEquipeRoute = AgenceSlugEquipeRouteImport.update({
+  id: '/equipe',
+  path: '/equipe',
+  getParentRoute: () => AgenceSlugRoute,
+} as any)
+const AdminAgenciesSlugRoute = AdminAgenciesSlugRouteImport.update({
+  id: '/agencies/$slug',
+  path: '/agencies/$slug',
+  getParentRoute: () => AdminRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/activation-agent': typeof ActivationAgentRoute
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
@@ -155,9 +198,15 @@ export interface FileRoutesByFullPath {
   '/resultat': typeof ResultatRoute
   '/seller-dashboard': typeof SellerDashboardRoute
   '/vendeur': typeof VendeurRoute
-  '/agence/$id': typeof AgenceIdRoute
+  '/agence/$slug': typeof AgenceSlugRouteWithChildren
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
+  '/demo-agence/$slug': typeof DemoAgenceSlugRoute
   '/agence/': typeof AgenceIndexRoute
+  '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
+  '/agence/$slug/equipe': typeof AgenceSlugEquipeRoute
+  '/agence/$slug/estimation': typeof AgenceSlugEstimationRoute
+  '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
+  '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRoutesByTo {
@@ -165,6 +214,7 @@ export interface FileRoutesByTo {
   '/activation-agent': typeof ActivationAgentRoute
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
@@ -178,9 +228,15 @@ export interface FileRoutesByTo {
   '/resultat': typeof ResultatRoute
   '/seller-dashboard': typeof SellerDashboardRoute
   '/vendeur': typeof VendeurRoute
-  '/agence/$id': typeof AgenceIdRoute
+  '/agence/$slug': typeof AgenceSlugRouteWithChildren
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
+  '/demo-agence/$slug': typeof DemoAgenceSlugRoute
   '/agence': typeof AgenceIndexRoute
+  '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
+  '/agence/$slug/equipe': typeof AgenceSlugEquipeRoute
+  '/agence/$slug/estimation': typeof AgenceSlugEstimationRoute
+  '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
+  '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRoutesById {
@@ -189,6 +245,7 @@ export interface FileRoutesById {
   '/activation-agent': typeof ActivationAgentRoute
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
+  '/admin': typeof AdminRouteWithChildren
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
@@ -202,9 +259,15 @@ export interface FileRoutesById {
   '/resultat': typeof ResultatRoute
   '/seller-dashboard': typeof SellerDashboardRoute
   '/vendeur': typeof VendeurRoute
-  '/agence/$id': typeof AgenceIdRoute
+  '/agence/$slug': typeof AgenceSlugRouteWithChildren
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
+  '/demo-agence/$slug': typeof DemoAgenceSlugRoute
   '/agence/': typeof AgenceIndexRoute
+  '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
+  '/agence/$slug/equipe': typeof AgenceSlugEquipeRoute
+  '/agence/$slug/estimation': typeof AgenceSlugEstimationRoute
+  '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
+  '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRouteTypes {
@@ -214,6 +277,7 @@ export interface FileRouteTypes {
     | '/activation-agent'
     | '/activation-patron'
     | '/activation-vendeur'
+    | '/admin'
     | '/admin-agence'
     | '/agent'
     | '/agent-dashboard'
@@ -227,9 +291,15 @@ export interface FileRouteTypes {
     | '/resultat'
     | '/seller-dashboard'
     | '/vendeur'
-    | '/agence/$id'
+    | '/agence/$slug'
     | '/agence/compte-rendu'
+    | '/demo-agence/$slug'
     | '/agence/'
+    | '/admin/agencies/$slug'
+    | '/agence/$slug/equipe'
+    | '/agence/$slug/estimation'
+    | '/agence/$slug/estimations'
+    | '/agence/$slug/settings'
     | '/agent/properties/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -237,6 +307,7 @@ export interface FileRouteTypes {
     | '/activation-agent'
     | '/activation-patron'
     | '/activation-vendeur'
+    | '/admin'
     | '/admin-agence'
     | '/agent'
     | '/agent-dashboard'
@@ -250,9 +321,15 @@ export interface FileRouteTypes {
     | '/resultat'
     | '/seller-dashboard'
     | '/vendeur'
-    | '/agence/$id'
+    | '/agence/$slug'
     | '/agence/compte-rendu'
+    | '/demo-agence/$slug'
     | '/agence'
+    | '/admin/agencies/$slug'
+    | '/agence/$slug/equipe'
+    | '/agence/$slug/estimation'
+    | '/agence/$slug/estimations'
+    | '/agence/$slug/settings'
     | '/agent/properties/$id'
   id:
     | '__root__'
@@ -260,6 +337,7 @@ export interface FileRouteTypes {
     | '/activation-agent'
     | '/activation-patron'
     | '/activation-vendeur'
+    | '/admin'
     | '/admin-agence'
     | '/agent'
     | '/agent-dashboard'
@@ -273,9 +351,15 @@ export interface FileRouteTypes {
     | '/resultat'
     | '/seller-dashboard'
     | '/vendeur'
-    | '/agence/$id'
+    | '/agence/$slug'
     | '/agence/compte-rendu'
+    | '/demo-agence/$slug'
     | '/agence/'
+    | '/admin/agencies/$slug'
+    | '/agence/$slug/equipe'
+    | '/agence/$slug/estimation'
+    | '/agence/$slug/estimations'
+    | '/agence/$slug/settings'
     | '/agent/properties/$id'
   fileRoutesById: FileRoutesById
 }
@@ -284,6 +368,7 @@ export interface RootRouteChildren {
   ActivationAgentRoute: typeof ActivationAgentRoute
   ActivationPatronRoute: typeof ActivationPatronRoute
   ActivationVendeurRoute: typeof ActivationVendeurRoute
+  AdminRoute: typeof AdminRouteWithChildren
   AdminAgenceRoute: typeof AdminAgenceRoute
   AgentRoute: typeof AgentRouteWithChildren
   AgentDashboardRoute: typeof AgentDashboardRoute
@@ -297,8 +382,9 @@ export interface RootRouteChildren {
   ResultatRoute: typeof ResultatRoute
   SellerDashboardRoute: typeof SellerDashboardRoute
   VendeurRoute: typeof VendeurRoute
-  AgenceIdRoute: typeof AgenceIdRoute
+  AgenceSlugRoute: typeof AgenceSlugRouteWithChildren
   AgenceCompteRenduRoute: typeof AgenceCompteRenduRoute
+  DemoAgenceSlugRoute: typeof DemoAgenceSlugRoute
   AgenceIndexRoute: typeof AgenceIndexRoute
 }
 
@@ -395,6 +481,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAgenceRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/activation-vendeur': {
       id: '/activation-vendeur'
       path: '/activation-vendeur'
@@ -430,6 +523,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgenceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo-agence/$slug': {
+      id: '/demo-agence/$slug'
+      path: '/demo-agence/$slug'
+      fullPath: '/demo-agence/$slug'
+      preLoaderRoute: typeof DemoAgenceSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agence/compte-rendu': {
       id: '/agence/compte-rendu'
       path: '/agence/compte-rendu'
@@ -437,11 +537,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgenceCompteRenduRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agence/$id': {
-      id: '/agence/$id'
-      path: '/agence/$id'
-      fullPath: '/agence/$id'
-      preLoaderRoute: typeof AgenceIdRouteImport
+    '/agence/$slug': {
+      id: '/agence/$slug'
+      path: '/agence/$slug'
+      fullPath: '/agence/$slug'
+      preLoaderRoute: typeof AgenceSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agent/properties/$id': {
@@ -451,8 +551,53 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentPropertiesIdRouteImport
       parentRoute: typeof AgentRoute
     }
+    '/agence/$slug/settings': {
+      id: '/agence/$slug/settings'
+      path: '/settings'
+      fullPath: '/agence/$slug/settings'
+      preLoaderRoute: typeof AgenceSlugSettingsRouteImport
+      parentRoute: typeof AgenceSlugRoute
+    }
+    '/agence/$slug/estimations': {
+      id: '/agence/$slug/estimations'
+      path: '/estimations'
+      fullPath: '/agence/$slug/estimations'
+      preLoaderRoute: typeof AgenceSlugEstimationsRouteImport
+      parentRoute: typeof AgenceSlugRoute
+    }
+    '/agence/$slug/estimation': {
+      id: '/agence/$slug/estimation'
+      path: '/estimation'
+      fullPath: '/agence/$slug/estimation'
+      preLoaderRoute: typeof AgenceSlugEstimationRouteImport
+      parentRoute: typeof AgenceSlugRoute
+    }
+    '/agence/$slug/equipe': {
+      id: '/agence/$slug/equipe'
+      path: '/equipe'
+      fullPath: '/agence/$slug/equipe'
+      preLoaderRoute: typeof AgenceSlugEquipeRouteImport
+      parentRoute: typeof AgenceSlugRoute
+    }
+    '/admin/agencies/$slug': {
+      id: '/admin/agencies/$slug'
+      path: '/agencies/$slug'
+      fullPath: '/admin/agencies/$slug'
+      preLoaderRoute: typeof AdminAgenciesSlugRouteImport
+      parentRoute: typeof AdminRoute
+    }
   }
 }
+
+interface AdminRouteChildren {
+  AdminAgenciesSlugRoute: typeof AdminAgenciesSlugRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminAgenciesSlugRoute: AdminAgenciesSlugRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface AgentRouteChildren {
   AgentPropertiesIdRoute: typeof AgentPropertiesIdRoute
@@ -464,11 +609,30 @@ const AgentRouteChildren: AgentRouteChildren = {
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
 
+interface AgenceSlugRouteChildren {
+  AgenceSlugEquipeRoute: typeof AgenceSlugEquipeRoute
+  AgenceSlugEstimationRoute: typeof AgenceSlugEstimationRoute
+  AgenceSlugEstimationsRoute: typeof AgenceSlugEstimationsRoute
+  AgenceSlugSettingsRoute: typeof AgenceSlugSettingsRoute
+}
+
+const AgenceSlugRouteChildren: AgenceSlugRouteChildren = {
+  AgenceSlugEquipeRoute: AgenceSlugEquipeRoute,
+  AgenceSlugEstimationRoute: AgenceSlugEstimationRoute,
+  AgenceSlugEstimationsRoute: AgenceSlugEstimationsRoute,
+  AgenceSlugSettingsRoute: AgenceSlugSettingsRoute,
+}
+
+const AgenceSlugRouteWithChildren = AgenceSlugRoute._addFileChildren(
+  AgenceSlugRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   ActivationAgentRoute: ActivationAgentRoute,
   ActivationPatronRoute: ActivationPatronRoute,
   ActivationVendeurRoute: ActivationVendeurRoute,
+  AdminRoute: AdminRouteWithChildren,
   AdminAgenceRoute: AdminAgenceRoute,
   AgentRoute: AgentRouteWithChildren,
   AgentDashboardRoute: AgentDashboardRoute,
@@ -482,8 +646,9 @@ const rootRouteChildren: RootRouteChildren = {
   ResultatRoute: ResultatRoute,
   SellerDashboardRoute: SellerDashboardRoute,
   VendeurRoute: VendeurRoute,
-  AgenceIdRoute: AgenceIdRoute,
+  AgenceSlugRoute: AgenceSlugRouteWithChildren,
   AgenceCompteRenduRoute: AgenceCompteRenduRoute,
+  DemoAgenceSlugRoute: DemoAgenceSlugRoute,
   AgenceIndexRoute: AgenceIndexRoute,
 }
 export const routeTree = rootRouteImport
