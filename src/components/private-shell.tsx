@@ -104,15 +104,21 @@ export function PrivateCard({
 
 export function PrivateStatusBadge({ status }: { status: string }) {
   const normalized = status.toLowerCase();
-  const isActive =
-    normalized.includes("active") ||
-    normalized.includes("activé") ||
-    normalized.includes("créé") ||
-    normalized.includes("created");
+  const isNegative =
+    normalized.includes("non créé") ||
+    normalized.includes("non cree") ||
+    normalized.includes("not_created");
   const isPending =
+    isNegative ||
     normalized.includes("pending") ||
     normalized.includes("attente") ||
     normalized.includes("créer");
+  const isActive =
+    !isPending &&
+    (normalized.includes("active") ||
+      normalized.includes("activé") ||
+      normalized.includes("créé") ||
+      normalized.includes("created"));
 
   const label =
     status === "active"

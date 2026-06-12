@@ -1,4 +1,9 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  Link,
+  Outlet,
+  useRouterState,
+} from "@tanstack/react-router";
 import { ArrowRight, Plus } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState, type ReactNode } from "react";
 
@@ -13,9 +18,13 @@ import { ProtectedRoute } from "@/components/protected-route";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { useAuth } from "@/hooks/use-auth";
 import {
+  AGENT_PROPERTY_TYPES,
+  AGENT_SALE_STATUSES,
   getAgentListings,
+  readDeletedAgentListingIds,
   readLocalAgentListings,
   writeLocalAgentListings,
   type AgentListing,
@@ -36,6 +45,13 @@ export const Route = createFileRoute("/agent")({
 });
 
 function AgentRoute() {
+  const pathname = useRouterState({
+    select: (state) => state.location.pathname,
+  });
+  const isAgentList = pathname === "/agent" || pathname === "/agent/";
+
+  if (!isAgentList) return <Outlet />;
+
   return (
     <ProtectedRoute role={["agent", "agency_admin"]}>
       <AgentSpace />
@@ -47,20 +63,9 @@ function AgentSpace() {
   const { profile } = useAuth();
   const [agency, setAgency] = useState<AgencySummary | null>(null);
   const [createdListings, setCreatedListings] = useState<AgentListing[]>([]);
+  const [deletedListingIds, setDeletedListingIds] = useState<string[]>([]);
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [form, setForm] = useState<AgentListing>({
-    id: "",
-    title: "",
-    city: "",
-    address: "",
-    price: "",
-    surface: "",
-    rooms: "",
-    sellerFirstName: "",
-    sellerLastName: "",
-    sellerEmail: "",
-    sellerPhone: "",
-  });
+  const [form, setForm] = useState<AgentListing>(createEmptyListingForm);
 
   useEffect(() => {
     async function loadAgency() {
@@ -73,11 +78,12 @@ function AgentSpace() {
 
   useEffect(() => {
     setCreatedListings(readLocalAgentListings());
+    setDeletedListingIds(readDeletedAgentListingIds());
   }, []);
 
   const listings = useMemo(
-    () => getAgentListings(createdListings),
-    [createdListings],
+    () => getAgentListings(createdListings, deletedListingIds),
+    [createdListings, deletedListingIds],
   );
 
   function onCreateListing(event: FormEvent<HTMLFormElement>) {
@@ -86,16 +92,24 @@ function AgentSpace() {
       ...form,
       id: `listing-${Date.now()}`,
       title: form.title.trim(),
+      propertyType: form.propertyType?.trim(),
       city: form.city.trim(),
       address: form.address.trim(),
       price: form.price.trim(),
       surface: form.surface.trim(),
       rooms: form.rooms.trim(),
+      bedrooms: form.bedrooms?.trim(),
+      bathrooms: form.bathrooms?.trim(),
+      exterior: form.exterior?.trim(),
+      parking: form.parking?.trim(),
+      description: form.description?.trim(),
+      coverImage: form.photos?.[0],
+      photos: form.photos,
+      saleStatus: form.saleStatus ?? "En préparation",
       sellerFirstName: form.sellerFirstName.trim(),
       sellerLastName: form.sellerLastName.trim(),
       sellerEmail: form.sellerEmail.trim(),
       sellerPhone: form.sellerPhone.trim(),
-      saleStatus: "En préparation",
       sellerSpaceStatus: "not_created",
       documents: [
         { name: "Mandat", status: "À préparer" },
@@ -108,19 +122,18 @@ function AgentSpace() {
     setCreatedListings(nextListings);
     setShowCreateForm(false);
     writeLocalAgentListings(nextListings);
-    setForm({
-      id: "",
-      title: "",
-      city: "",
-      address: "",
-      price: "",
-      surface: "",
-      rooms: "",
-      sellerFirstName: "",
-      sellerLastName: "",
-      sellerEmail: "",
-      sellerPhone: "",
-    });
+    setForm(createEmptyListingForm());
+  }
+
+  async function onPhotoInput(files: FileList | null) {
+    const photos = await readImageFiles(files);
+    if (!photos.length) return;
+
+    setForm((current) => ({
+      ...current,
+      photos,
+      coverImage: photos[0],
+    }));
   }
 
   return (
@@ -153,7 +166,7 @@ function AgentSpace() {
               className="mt-7 grid gap-4 md:grid-cols-2 lg:grid-cols-3"
               onSubmit={onCreateListing}
             >
-              <Field label="Titre du bien">
+              <Field label="Titre de l’annonce">
                 <Input
                   value={form.title}
                   onChange={(event) =>
@@ -161,6 +174,21 @@ function AgentSpace() {
                   }
                   required
                 />
+              </Field>
+              <Field label="Type de bien">
+                <select
+                  value={form.propertyType}
+                  onChange={(event) =>
+                    setForm({ ...form, propertyType: event.target.value })
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {AGENT_PROPERTY_TYPES.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
               </Field>
               <Field label="Ville">
                 <Input
@@ -206,6 +234,85 @@ function AgentSpace() {
                   }
                   placeholder="5"
                 />
+              </Field>
+              <Field label="Chambres">
+                <Input
+                  value={form.bedrooms}
+                  onChange={(event) =>
+                    setForm({ ...form, bedrooms: event.target.value })
+                  }
+                  placeholder="3"
+                />
+              </Field>
+              <Field label="Extérieur">
+                <Input
+                  value={form.exterior}
+                  onChange={(event) =>
+                    setForm({ ...form, exterior: event.target.value })
+                  }
+                  placeholder="Jardin, balcon, terrasse..."
+                />
+              </Field>
+              <Field label="Garage / parking">
+                <Input
+                  value={form.parking}
+                  onChange={(event) =>
+                    setForm({ ...form, parking: event.target.value })
+                  }
+                  placeholder="Garage, place privative..."
+                />
+              </Field>
+              <Field label="Statut">
+                <select
+                  value={form.saleStatus}
+                  onChange={(event) =>
+                    setForm({ ...form, saleStatus: event.target.value })
+                  }
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {AGENT_SALE_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field
+                label="Description de l’annonce"
+                className="md:col-span-2 lg:col-span-3"
+              >
+                <Textarea
+                  value={form.description}
+                  onChange={(event) =>
+                    setForm({ ...form, description: event.target.value })
+                  }
+                  placeholder="Décrivez le bien, son ambiance, ses atouts et les informations utiles aux acheteurs."
+                  className="min-h-32"
+                  required
+                />
+              </Field>
+              <Field
+                label="Photos du bien"
+                className="md:col-span-2 lg:col-span-3"
+              >
+                <Input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  onChange={(event) => onPhotoInput(event.target.files)}
+                />
+                {form.photos?.length ? (
+                  <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4">
+                    {form.photos.map((photo, index) => (
+                      <img
+                        key={`${photo}-${index}`}
+                        src={photo}
+                        alt={`Photo ${index + 1} du bien`}
+                        className="aspect-[4/3] w-full rounded-2xl object-cover"
+                      />
+                    ))}
+                  </div>
+                ) : null}
               </Field>
               <Field label="Prénom vendeur">
                 <Input
@@ -296,7 +403,10 @@ function AgentSpace() {
                       variant="outline"
                       className="mt-4 rounded-full"
                     >
-                      <Link to="/agent/bien/$id" params={{ id: listing.id }}>
+                      <Link
+                        to="/agent/properties/$id"
+                        params={{ id: listing.id }}
+                      >
                         Gérer
                         <ArrowRight className="h-4 w-4" />
                       </Link>
@@ -317,9 +427,59 @@ function getFirstName(value?: string | null) {
   return value.split("@")[0].split(/[.\s_-]/)[0] || "";
 }
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function createEmptyListingForm(): AgentListing {
+  return {
+    id: "",
+    title: "",
+    propertyType: "Maison",
+    city: "",
+    address: "",
+    price: "",
+    surface: "",
+    rooms: "",
+    bedrooms: "",
+    bathrooms: "",
+    exterior: "",
+    parking: "",
+    description: "",
+    sellerFirstName: "",
+    sellerLastName: "",
+    sellerEmail: "",
+    sellerPhone: "",
+    photos: [],
+    saleStatus: "En préparation",
+  };
+}
+
+async function readImageFiles(files: FileList | null) {
+  if (!files?.length) return [];
+
+  return Promise.all(
+    Array.from(files).map(
+      (file) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener("load", () =>
+            resolve(String(reader.result ?? "")),
+          );
+          reader.addEventListener("error", () => reject(reader.error));
+          reader.readAsDataURL(file);
+        }),
+    ),
+  );
+}
+
+function Field({
+  label,
+  children,
+  className = "",
+}: {
+  label: string;
+  children: ReactNode;
+  className?: string;
+}) {
   return (
-    <div className="space-y-2">
+    <div className={`space-y-2 ${className}`}>
       <Label>{label}</Label>
       {children}
     </div>

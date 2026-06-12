@@ -29,7 +29,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
 import { Route as AgenceCompteRenduRouteImport } from './routes/agence.compte-rendu'
 import { Route as AgenceIdRouteImport } from './routes/agence.$id'
-import { Route as AgentBienIdRouteImport } from './routes/agent.bien.$id'
+import { Route as AgentPropertiesIdRouteImport } from './routes/agent.properties.$id'
 
 const VendeurRoute = VendeurRouteImport.update({
   id: '/vendeur',
@@ -131,9 +131,9 @@ const AgenceIdRoute = AgenceIdRouteImport.update({
   path: '/agence/$id',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgentBienIdRoute = AgentBienIdRouteImport.update({
-  id: '/bien/$id',
-  path: '/bien/$id',
+const AgentPropertiesIdRoute = AgentPropertiesIdRouteImport.update({
+  id: '/properties/$id',
+  path: '/properties/$id',
   getParentRoute: () => AgentRoute,
 } as any)
 
@@ -158,7 +158,7 @@ export interface FileRoutesByFullPath {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
-  '/agent/bien/$id': typeof AgentBienIdRoute
+  '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -181,7 +181,7 @@ export interface FileRoutesByTo {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence': typeof AgenceIndexRoute
-  '/agent/bien/$id': typeof AgentBienIdRoute
+  '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -205,7 +205,7 @@ export interface FileRoutesById {
   '/agence/$id': typeof AgenceIdRoute
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/agence/': typeof AgenceIndexRoute
-  '/agent/bien/$id': typeof AgentBienIdRoute
+  '/agent/properties/$id': typeof AgentPropertiesIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -230,7 +230,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
-    | '/agent/bien/$id'
+    | '/agent/properties/$id'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -253,7 +253,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence'
-    | '/agent/bien/$id'
+    | '/agent/properties/$id'
   id:
     | '__root__'
     | '/'
@@ -276,7 +276,7 @@ export interface FileRouteTypes {
     | '/agence/$id'
     | '/agence/compte-rendu'
     | '/agence/'
-    | '/agent/bien/$id'
+    | '/agent/properties/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -444,22 +444,22 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgenceIdRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agent/bien/$id': {
-      id: '/agent/bien/$id'
-      path: '/bien/$id'
-      fullPath: '/agent/bien/$id'
-      preLoaderRoute: typeof AgentBienIdRouteImport
+    '/agent/properties/$id': {
+      id: '/agent/properties/$id'
+      path: '/properties/$id'
+      fullPath: '/agent/properties/$id'
+      preLoaderRoute: typeof AgentPropertiesIdRouteImport
       parentRoute: typeof AgentRoute
     }
   }
 }
 
 interface AgentRouteChildren {
-  AgentBienIdRoute: typeof AgentBienIdRoute
+  AgentPropertiesIdRoute: typeof AgentPropertiesIdRoute
 }
 
 const AgentRouteChildren: AgentRouteChildren = {
-  AgentBienIdRoute: AgentBienIdRoute,
+  AgentPropertiesIdRoute: AgentPropertiesIdRoute,
 }
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
