@@ -20,6 +20,7 @@ type SellerSpaceCreatorProps = {
     email?: string;
     phone?: string;
   };
+  onSpaceReady?: (result: SellerSpaceCreationResult) => void;
 };
 
 export function SellerSpaceCreator({
@@ -27,6 +28,7 @@ export function SellerSpaceCreator({
   propertyTitle,
   sellerSpaceExists = false,
   initialSeller,
+  onSpaceReady,
 }: SellerSpaceCreatorProps) {
   const [seller, setSeller] = useState({
     firstName: initialSeller.firstName,
@@ -69,6 +71,7 @@ export function SellerSpaceCreator({
     });
 
     setResult(nextResult);
+    onSpaceReady?.(nextResult);
     setSubmitting(false);
     setGmailBlocked(!openSellerSpaceGmail(nextResult.gmailHref));
   }
