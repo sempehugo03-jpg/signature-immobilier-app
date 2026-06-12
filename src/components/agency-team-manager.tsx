@@ -1,12 +1,14 @@
-import { Trash2, UserRoundPlus } from "lucide-react";
+import { RotateCcw, Trash2, UserRoundPlus, UserX } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
-import { Field, SectionTitle } from "@/components/agency-saas-ui";
+import { Field, SectionTitle, StatusBadge } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   addTeamMember,
   deleteTeamMember,
+  disableTeamMember,
+  enableTeamMember,
   getAgents,
   getManagers,
   type TeamMember,
@@ -16,7 +18,7 @@ import {
 export function AgencyTeamManager({
   agencyId,
   title = "Équipe",
-  description = "Ajoutez ou supprimez les gérants et agents rattachés à l’agence.",
+  description = "Ajoutez, supprimez, désactivez ou réactivez les patrons et agents rattachés à l’agence.",
   onChange,
 }: {
   agencyId: string;
@@ -40,19 +42,35 @@ export function AgencyTeamManager({
 
   function onAdd(
     role: TeamRole,
-    data: Omit<TeamMember, "id" | "agencyId" | "createdAt">,
+    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
   ) {
-    addTeamMember(agencyId, data);
-    setFeedback(role === "manager" ? "Gérant ajouté." : "Agent ajouté.");
+    addTeamMember(agencyId, { ...data, role, status: "active" });
+    setFeedback(role === "manager" ? "Patron ajouté." : "Agent ajouté.");
     refresh();
   }
 
   function onDelete(member: TeamMember) {
-    const label =
-      `${member.firstName} ${member.lastName}`.trim() || member.email;
-    if (!window.confirm(`Supprimer ${label} de l’équipe ?`)) return;
+    const isManager = member.role === "manager";
+    const message = isManager ? "Supprimer ce patron ?" : "Supprimer cet agent ?";
+    if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
-    setFeedback("Membre supprimé.");
+    setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
+    refresh();
+  }
+
+  function onDisable(member: TeamMember) {
+    disableTeamMember(member.id);
+    setFeedback(
+      member.role === "manager" ? "Patron désactivé." : "Agent désactivé.",
+    );
+    refresh();
+  }
+
+  function onEnable(member: TeamMember) {
+    enableTeamMember(member.id);
+    setFeedback(
+      member.role === "manager" ? "Patron réactivé." : "Agent réactivé.",
+    );
     refresh();
   }
 
@@ -66,12 +84,14 @@ export function AgencyTeamManager({
       )}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <TeamColumn
-          title="Gérants"
-          empty="Aucun gérant ajouté pour le moment."
+          title="Patrons / Gérants"
+          empty="Aucun patron ajouté pour le moment."
           members={managers}
           role="manager"
           onAdd={onAdd}
           onDelete={onDelete}
+          onDisable={onDisable}
+          onEnable={onEnable}
         />
         <TeamColumn
           title="Agents"
@@ -80,6 +100,8 @@ export function AgencyTeamManager({
           role="agent"
           onAdd={onAdd}
           onDelete={onDelete}
+          onDisable={onDisable}
+          onEnable={onEnable}
         />
       </div>
     </div>
@@ -93,6 +115,8 @@ function TeamColumn({
   role,
   onAdd,
   onDelete,
+  onDisable,
+  onEnable,
 }: {
   title: string;
   empty: string;
@@ -100,10 +124,14 @@ function TeamColumn({
   role: TeamRole;
   onAdd: (
     role: TeamRole,
-    data: Omit<TeamMember, "id" | "agencyId" | "createdAt">,
+    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
   ) => void;
   onDelete: (member: TeamMember) => void;
+  onDisable: (member: TeamMember) => void;
+  onEnable: (member: TeamMember) => void;
 }) {
+  const noun = role === "manager" ? "patron" : "agent";
+
   return (
     <div className="rounded-[22px] border border-[#e8e0d5] bg-[#fffdf9] p-5">
       <div className="flex items-center gap-3">
@@ -122,25 +150,58 @@ function TeamColumn({
         {members.map((member) => (
           <div
             key={member.id}
-            className="flex flex-col gap-3 rounded-2xl border border-[#e8e0d5] bg-white p-4 sm:flex-row sm:items-center sm:justify-between"
+            className="rounded-2xl border border-[#e8e0d5] bg-white p-4"
           >
-            <div className="min-w-0">
-              <div className="font-medium">
-                {member.firstName} {member.lastName}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+              <div className="min-w-0">
+                <div className="font-medium">
+                  {member.firstName} {member.lastName}
+                </div>
+                <div className="break-words text-sm text-primary/55">
+                  {member.email}
+                </div>
+                {member.phone && (
+                  <div className="mt-1 text-sm text-primary/45">
+                    {member.phone}
+                  </div>
+                )}
               </div>
-              <div className="break-words text-sm text-primary/55">
-                {member.email}
-              </div>
+              <StatusBadge
+                status={member.status === "active" ? "actif" : "désactivé"}
+              />
             </div>
-            <Button
-              type="button"
-              variant="outline"
-              className="rounded-full bg-white text-red-700 hover:text-red-700"
-              onClick={() => onDelete(member)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Supprimer
-            </Button>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {member.status === "active" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={() => onDisable(member)}
+                >
+                  <UserX className="h-4 w-4" />
+                  Désactiver
+                </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={() => onEnable(member)}
+                >
+                  <RotateCcw className="h-4 w-4" />
+                  Réactiver
+                </Button>
+              )}
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full bg-white text-red-700 hover:text-red-700"
+                onClick={() => onDelete(member)}
+              >
+                <Trash2 className="h-4 w-4" />
+                Supprimer {noun}
+              </Button>
+            </div>
           </div>
         ))}
       </div>
@@ -155,24 +216,20 @@ function AddMemberForm({
   role: TeamRole;
   onAdd: (
     role: TeamRole,
-    data: Omit<TeamMember, "id" | "agencyId" | "createdAt">,
+    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
   ) => void;
 }) {
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
+    phone: "",
   });
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    onAdd(role, {
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      role,
-    });
-    setForm({ firstName: "", lastName: "", email: "" });
+    onAdd(role, form);
+    setForm({ firstName: "", lastName: "", email: "", phone: "" });
   }
 
   return (
@@ -203,9 +260,16 @@ function AddMemberForm({
           required
         />
       </Field>
+      <Field label="Téléphone optionnel" className="sm:col-span-2">
+        <Input
+          type="tel"
+          value={form.phone}
+          onChange={(event) => setForm({ ...form, phone: event.target.value })}
+        />
+      </Field>
       <div className="sm:col-span-2">
         <Button className="w-full rounded-full" size="lg">
-          Ajouter {role === "manager" ? "un gérant" : "un agent"}
+          Ajouter {role === "manager" ? "un patron" : "un agent"}
         </Button>
       </div>
     </form>

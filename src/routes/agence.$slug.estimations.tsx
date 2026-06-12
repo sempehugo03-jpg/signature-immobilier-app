@@ -58,7 +58,9 @@ function AgencyEstimationsRoute() {
       <SaasShell action={<LogoutLink />}>
         <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8">
           <SaasCard className="p-8 md:p-12">
-            <h1 className="font-display text-4xl">Agence introuvable</h1>
+            <h1 className="font-display text-4xl">
+              Cette agence n’est plus active sur Signature Immobilier.
+            </h1>
           </SaasCard>
         </section>
       </SaasShell>
@@ -82,11 +84,7 @@ function AgencyEstimationsRoute() {
       />
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
-        <Button
-          asChild
-          variant="outline"
-          className="mb-7 rounded-full bg-white"
-        >
+        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour au portail
@@ -139,7 +137,7 @@ function LeadCard({
             {lead.firstName} {lead.lastName}
           </h3>
           <p className="mt-1 text-sm text-primary/55">
-            {lead.propertyType} - {lead.propertyCity}
+            {lead.propertyType} — {lead.propertyCity}
           </p>
         </div>
         <StatusBadge status={lead.status} />

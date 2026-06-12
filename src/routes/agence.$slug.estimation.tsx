@@ -76,15 +76,22 @@ function AgencyEstimationRoute() {
     }
 
     if (agency.status === "disabled") {
-      setMessage(
-        "Votre portail est actuellement désactivé. Contactez Signature Immobilier pour le réactiver.",
-      );
+      setMessage("Le portail de cette agence est actuellement désactivé.");
       setSubmitted(true);
       return;
     }
 
     const lead = saveAgencyLead({
       ...form,
+      answers:
+        form.answers ||
+        [
+          `Surface : ${form.surface}`,
+          `Nombre de pièces : ${form.rooms}`,
+          `État du bien : ${form.propertyState}`,
+          `Extérieur : ${form.exterior || "Non renseigné"}`,
+          `Garage / parking : ${form.parking || "Non renseigné"}`,
+        ].join("\n"),
       agencySlug: agency.slug,
       agencyName: agency.name,
     });
@@ -99,10 +106,7 @@ function AgencyEstimationRoute() {
         },
       });
     } catch (error) {
-      console.info(
-        "Lead enregistré. Email non envoyé : RESEND_API_KEY manquante.",
-        error,
-      );
+      console.info("Email non envoyé : RESEND_API_KEY manquante", error);
     }
 
     setMessage(
@@ -118,7 +122,9 @@ function AgencyEstimationRoute() {
       <SaasShell action={<LogoutLink />}>
         <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8">
           <SaasCard className="p-8 md:p-12">
-            <h1 className="font-display text-4xl">Agence introuvable</h1>
+            <h1 className="font-display text-4xl">
+              Cette agence n’est plus active sur Signature Immobilier.
+            </h1>
           </SaasCard>
         </section>
       </SaasShell>
@@ -135,11 +141,7 @@ function AgencyEstimationRoute() {
       />
 
       <section className="mx-auto max-w-4xl px-5 pb-16 md:px-8">
-        <Button
-          asChild
-          variant="outline"
-          className="mb-7 rounded-full bg-white"
-        >
+        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour au portail

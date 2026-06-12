@@ -25,11 +25,7 @@ async function sendViaResend(
   const from = process.env.FROM_EMAIL;
 
   if (!apiKey) {
-    console.info(
-      context === "lead"
-        ? "Lead enregistré. Email non envoyé : RESEND_API_KEY manquante."
-        : "Agence activée. Email non envoyé : RESEND_API_KEY manquante.",
-    );
+    console.info("Email non envoyé : RESEND_API_KEY manquante");
     return {
       sent: false,
       reason: "RESEND_API_KEY_MISSING",
@@ -37,11 +33,7 @@ async function sendViaResend(
   }
 
   if (!from) {
-    console.info(
-      context === "lead"
-        ? "Lead enregistré. Email non envoyé : FROM_EMAIL manquante."
-        : "Agence activée. Email non envoyé : FROM_EMAIL manquante.",
-    );
+    console.info(`Email non envoyé (${context}) : FROM_EMAIL manquante`);
     return {
       sent: false,
       reason: "FROM_EMAIL_MISSING",
