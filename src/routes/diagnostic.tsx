@@ -4,7 +4,9 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
+  ExternalLink,
   Home,
+  Mail,
   MapPin,
   Ruler,
   UserRound,
@@ -39,6 +41,21 @@ type DiagnosticDraft = Omit<
   Diagnostic,
   "id" | "createdAt" | "score" | "temperature"
 >;
+
+const ESTIMATE_CALLBACK_RECIPIENTS = [
+  "sempehugo03@gmail.com",
+  "sempehugo03@gmail.com",
+] as const;
+
+const ESTIMATE_CALLBACK_SUBJECT =
+  "Nouvelle demande de rappel estimation - Signature Immobilier";
+
+type EstimateCallbackEmail = {
+  gmailUrl: string;
+  mailtoUrl: string;
+  body: string;
+  gmailOpened: boolean;
+};
 
 const empty: DiagnosticDraft = {
   bien: {
@@ -85,6 +102,8 @@ const empty: DiagnosticDraft = {
 function Page() {
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
+  const [callbackEmail, setCallbackEmail] =
+    useState<EstimateCallbackEmail | null>(null);
   const [data, setData] = useState<DiagnosticDraft>(empty);
   const steps = agencyConfig.estimation.steps;
 
@@ -112,6 +131,20 @@ function Page() {
 
   if (submitted) {
     const indicativeEstimate = getIndicativeEstimate(data);
+    const callbackEmailDraft = buildEstimateCallbackEmail(
+      data,
+      indicativeEstimate,
+    );
+
+    function openCallbackRequest() {
+      const gmailOpened = openGmail(callbackEmailDraft.gmailUrl);
+      setCallbackEmail({ ...callbackEmailDraft, gmailOpened });
+    }
+
+    function openCallbackGmailManually() {
+      const gmailOpened = openGmail(callbackEmailDraft.gmailUrl);
+      setCallbackEmail({ ...callbackEmailDraft, gmailOpened });
+    }
 
     return (
       <SiteLayout variant="public">
@@ -142,20 +175,62 @@ function Page() {
             <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
               {agencyConfig.estimation.finalText}
             </p>
-            <div className="mt-8 flex flex-wrap justify-center gap-3">
-              <a
-                href={agencyConfig.contact.phoneHref}
-                className="inline-flex items-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-              >
-                Être rappelé pour affiner l’estimation
-              </a>
-              <Link
-                to="/"
-                className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
-              >
-                Retour aux biens
-              </Link>
-            </div>
+            {callbackEmail ? (
+              <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5 text-left">
+                <div className="font-display text-2xl leading-tight text-primary">
+                  Votre demande de rappel est prête à être envoyée.
+                </div>
+                <p className="mt-3 text-sm leading-relaxed text-primary/70">
+                  Un conseiller vous rappellera rapidement pour affiner
+                  l’estimation de votre bien.
+                </p>
+                {callbackEmail.gmailOpened && (
+                  <p className="mt-3 rounded-2xl border border-emerald-100 bg-white/70 px-4 py-3 text-sm text-primary/70">
+                    L’email de demande de rappel s’est ouvert dans un nouvel
+                    onglet. Il ne vous reste plus qu’à l’envoyer.
+                  </p>
+                )}
+                <div className="mt-5 flex flex-wrap gap-3">
+                  <button
+                    type="button"
+                    onClick={openCallbackGmailManually}
+                    className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Ouvrir dans Gmail
+                  </button>
+                  <a
+                    href={callbackEmail.mailtoUrl}
+                    className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium text-primary transition hover:bg-secondary"
+                  >
+                    <Mail className="h-4 w-4" />
+                    Ouvrir l’application mail
+                  </a>
+                  <Link
+                    to="/"
+                    className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium text-primary transition hover:bg-secondary"
+                  >
+                    Retour à l’accueil
+                  </Link>
+                </div>
+              </div>
+            ) : (
+              <div className="mt-8 flex flex-wrap justify-center gap-3">
+                <button
+                  type="button"
+                  onClick={openCallbackRequest}
+                  className="inline-flex items-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                >
+                  Être rappelé pour affiner l’estimation
+                </button>
+                <Link
+                  to="/"
+                  className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+                >
+                  Retour aux biens
+                </Link>
+              </div>
+            )}
           </div>
         </section>
       </SiteLayout>
@@ -411,6 +486,74 @@ function Page() {
       </section>
     </SiteLayout>
   );
+}
+
+function buildEstimateCallbackEmail(
+  data: DiagnosticDraft,
+  indicativeEstimate: ReturnType<typeof getIndicativeEstimate>,
+) {
+  const recipients = ESTIMATE_CALLBACK_RECIPIENTS.join(",");
+  const encodedSubject = encodeURIComponent(ESTIMATE_CALLBACK_SUBJECT);
+  const body = [
+    "Nouvelle demande de rappel reçue depuis Signature Immobilier.",
+    "",
+    "Informations du prospect :",
+    "",
+    `* Prénom : ${displayValue(data.contact.prenom)}`,
+    `* Nom : ${displayValue(data.contact.nom)}`,
+    `* Email : ${displayValue(data.contact.email)}`,
+    `* Téléphone : ${displayValue(data.contact.telephone)}`,
+    "",
+    "Informations du bien :",
+    "",
+    `* Ville : ${displayValue(data.bien.ville)}`,
+    `* Type de bien : ${displayValue(data.bien.type)}`,
+    `* Surface : ${displayValue(data.bien.surface, "m²")}`,
+    `* Nombre de pièces : ${displayValue(data.bien.pieces)}`,
+    `* État du bien : ${displayValue(data.etat.general)}`,
+    `* Extérieur : ${displayValue(data.bien.exterieur)}`,
+    `* Garage / parking : ${displayValue(data.bien.stationnement)}`,
+    "",
+    "Estimation indicative :",
+    "",
+    `* Fourchette basse : ${formatEstimatePrice(indicativeEstimate.min)}`,
+    `* Fourchette haute : ${formatEstimatePrice(indicativeEstimate.max)}`,
+    "",
+    "Message :",
+    "Ce prospect souhaite être rappelé pour affiner son estimation.",
+  ].join("\n");
+  const encodedBody = encodeURIComponent(body);
+
+  return {
+    gmailUrl: `https://mail.google.com/mail/?view=cm&fs=1&to=${recipients}&su=${encodedSubject}&body=${encodedBody}`,
+    mailtoUrl: `mailto:${recipients}?subject=${encodedSubject}&body=${encodedBody}`,
+    body,
+    gmailOpened: false,
+  };
+}
+
+function displayValue(value: string, suffix = "") {
+  const cleanedValue = value.trim();
+  if (!cleanedValue) return "Non renseigné";
+
+  return suffix ? `${cleanedValue} ${suffix}` : cleanedValue;
+}
+
+function formatEstimatePrice(value: number) {
+  return new Intl.NumberFormat("fr-FR", {
+    style: "currency",
+    currency: "EUR",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function openGmail(gmailUrl: string) {
+  const opened = window.open(gmailUrl, "_blank");
+  if (opened) {
+    opened.opener = null;
+  }
+
+  return Boolean(opened);
 }
 
 function Field({
