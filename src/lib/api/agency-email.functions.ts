@@ -1,21 +1,61 @@
 import { createServerFn } from "@tanstack/react-start";
-import { z } from "zod";
 
-const emailPayloadSchema = z.object({
-  to: z.array(z.string().email()).min(1),
-  subject: z.string().min(1),
-  body: z.string().min(1),
+import { isValidEmail } from "@/lib/email-utils";
+
+type EmailPayload = {
+  to: string[];
+  subject: string;
+  body: string;
+};
+
+export const sendManagerAccessEmail = createServerFn({
+  method: "POST",
+}).handler(async ({ data }) => {
+  const payload = normalizeEmailPayload(data);
+  if (!payload) {
+    return {
+      sent: false,
+      reason: "INVALID_EMAIL",
+    };
+  }
+
+  return sendViaResend(payload, "manager-access");
 });
 
-type EmailPayload = z.infer<typeof emailPayloadSchema>;
+export const sendLeadNotificationEmail = createServerFn({
+  method: "POST",
+}).handler(async ({ data }) => {
+  const payload = normalizeEmailPayload(data);
+  if (!payload) {
+    return {
+      sent: false,
+      reason: "INVALID_EMAIL",
+    };
+  }
 
-export const sendManagerAccessEmail = createServerFn({ method: "POST" })
-  .validator(emailPayloadSchema)
-  .handler(async ({ data }) => sendViaResend(data, "manager-access"));
+  return sendViaResend(payload, "lead");
+});
 
-export const sendLeadNotificationEmail = createServerFn({ method: "POST" })
-  .validator(emailPayloadSchema)
-  .handler(async ({ data }) => sendViaResend(data, "lead"));
+function normalizeEmailPayload(data: unknown): EmailPayload | null {
+  if (!isRecord(data)) return null;
+
+  const to = Array.isArray(data.to)
+    ? data.to
+        .filter((email): email is string => typeof email === "string")
+        .map((email) => email.trim())
+        .filter(isValidEmail)
+    : [];
+  const subject = typeof data.subject === "string" ? data.subject.trim() : "";
+  const body = typeof data.body === "string" ? data.body.trim() : "";
+
+  if (!to.length || !subject || !body) return null;
+
+  return { to, subject, body };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
 
 async function sendViaResend(
   data: EmailPayload,

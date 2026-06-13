@@ -14,6 +14,7 @@ import {
   type TeamMember,
   type TeamRole,
 } from "@/lib/agency-saas";
+import { isValidEmail } from "@/lib/email-utils";
 
 export function AgencyTeamManager({
   agencyId,
@@ -51,7 +52,9 @@ export function AgencyTeamManager({
 
   function onDelete(member: TeamMember) {
     const isManager = member.role === "manager";
-    const message = isManager ? "Supprimer ce patron ?" : "Supprimer cet agent ?";
+    const message = isManager
+      ? "Supprimer ce patron ?"
+      : "Supprimer cet agent ?";
     if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
     setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
@@ -225,11 +228,18 @@ function AddMemberForm({
     email: "",
     phone: "",
   });
+  const [error, setError] = useState("");
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!isValidEmail(form.email)) {
+      setError("Email invalide.");
+      return;
+    }
+
     onAdd(role, form);
     setForm({ firstName: "", lastName: "", email: "", phone: "" });
+    setError("");
   }
 
   return (
@@ -256,10 +266,18 @@ function AddMemberForm({
         <Input
           type="email"
           value={form.email}
-          onChange={(event) => setForm({ ...form, email: event.target.value })}
+          onChange={(event) => {
+            setForm({ ...form, email: event.target.value });
+            setError("");
+          }}
+          onInvalid={(event) => {
+            event.preventDefault();
+            setError("Email invalide.");
+          }}
           required
         />
       </Field>
+      {error && <p className="sm:col-span-2 text-sm text-red-600">{error}</p>}
       <Field label="Téléphone optionnel" className="sm:col-span-2">
         <Input
           type="tel"
