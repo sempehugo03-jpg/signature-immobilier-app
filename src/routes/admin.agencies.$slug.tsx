@@ -25,6 +25,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
+import { clearAdminSession } from "@/lib/admin-session";
 import {
   activateAgency,
   buildManagerActivationEmail,
@@ -48,7 +49,6 @@ export const Route = createFileRoute("/admin/agencies/$slug")({
   component: AdminAgencyRoute,
 });
 
-const adminSessionKey = "signature_admin_access";
 const adminFlashKey = "signature_admin_flash";
 
 function AdminAgencyRoute() {
@@ -88,8 +88,8 @@ function AdminAgencyRoute() {
   }
 
   function onLogout() {
-    window.sessionStorage.removeItem(adminSessionKey);
-    navigate({ to: "/admin", replace: true });
+    clearAdminSession();
+    window.location.assign("/admin");
   }
 
   function onSave(event: FormEvent<HTMLFormElement>) {
@@ -182,9 +182,10 @@ function AdminAgencyRoute() {
       <SaasShell action={<AdminLogoutButton onClick={onLogout} />}>
         <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8">
           <SaasCard className="p-8 md:p-12">
-            <h1 className="font-display text-4xl">
-              Cette agence n’est plus active sur Signature Immobilier.
-            </h1>
+            <h1 className="font-display text-4xl">Agence introuvable</h1>
+            <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-primary/55">
+              Cette agence n’existe pas ou a été retirée.
+            </p>
             <Button asChild className="mt-6 rounded-full">
               <Link to="/admin">Retour à l’admin</Link>
             </Button>

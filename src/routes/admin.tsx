@@ -28,9 +28,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
 import {
+  clearAdminSession,
+  isAdminSessionActive,
+  saveAdminSession,
+} from "@/lib/admin-session";
+import {
   activateAgency,
   addTeamMember,
   buildManagerActivationEmail,
+  consumeStorageResetNotice,
   createAgency,
   disableAgency,
   generateAgencySlug,
@@ -56,7 +62,6 @@ export const Route = createFileRoute("/admin")({
   component: AdminRoute,
 });
 
-const adminSessionKey = "signature_admin_access";
 const adminFlashKey = "signature_admin_flash";
 
 function AdminRoute() {
@@ -69,12 +74,12 @@ function AdminRoute() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    setAuthorized(window.sessionStorage.getItem(adminSessionKey) === "granted");
+    setAuthorized(isAdminSessionActive());
     setLoaded(true);
   }, []);
 
   function onLogout() {
-    window.sessionStorage.removeItem(adminSessionKey);
+    clearAdminSession();
     setAuthorized(false);
     navigate({ to: "/admin", replace: true });
   }
@@ -105,8 +110,13 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
       return;
     }
 
-    window.sessionStorage.setItem(adminSessionKey, "granted");
+    saveAdminSession();
     onAuthorized();
+  }
+
+  function onResetSession() {
+    clearAdminSession();
+    window.location.assign("/admin");
   }
 
   return (
@@ -138,6 +148,13 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
               Ouvrir l’admin
             </Button>
           </form>
+          <button
+            type="button"
+            className="mt-5 text-sm font-medium text-primary/45 underline underline-offset-4 transition hover:text-primary"
+            onClick={onResetSession}
+          >
+            Réinitialiser ma session
+          </button>
         </SaasCard>
       </section>
     </SaasShell>
@@ -167,6 +184,8 @@ function AdminDashboard() {
     if (flash) {
       setFeedback(flash);
       window.sessionStorage.removeItem(adminFlashKey);
+    } else if (consumeStorageResetNotice()) {
+      setFeedback("Certaines données locales ont été réinitialisées.");
     }
   }, []);
 
@@ -431,6 +450,25 @@ function AdminDashboard() {
         )}
 
         <div className="mt-7 grid gap-4">
+          {agencies.length === 0 && (
+            <SaasCard className="p-6 text-center md:p-8">
+              <h3 className="font-display text-3xl leading-tight">
+                Aucune agence créée pour le moment.
+              </h3>
+              <p className="mx-auto mt-3 max-w-xl text-sm leading-relaxed text-primary/55">
+                Créez une agence pour afficher sa fiche, sa démo commerciale et
+                son espace agence activé.
+              </p>
+              <Button
+                type="button"
+                className="mt-6 rounded-full"
+                onClick={() => setShowCreateForm(true)}
+              >
+                <Plus className="h-4 w-4" />
+                Créer une agence
+              </Button>
+            </SaasCard>
+          )}
           {agencies.map((agency) => (
             <AgencyCard
               key={agency.id}
