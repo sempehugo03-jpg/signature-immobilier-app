@@ -280,7 +280,7 @@ function AdminDashboard() {
     <>
       <SaasHero
         eyebrow="Admin Signature"
-        title="Portails agences"
+        title="Espace admin Signature Immobilier"
         description="Créez une agence en démo, ajoutez son patron principal, puis activez le même portail quand elle signe."
       />
 
