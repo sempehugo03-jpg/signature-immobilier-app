@@ -457,6 +457,35 @@ function AdminAgencyRoute() {
                           Ouvrir dans Gmail
                         </a>
                       </Button>
+                      {email.accessUrl && (
+                        <>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="rounded-full bg-white"
+                            onClick={() =>
+                              copy(email.accessUrl ?? "", "Lien d'accès")
+                            }
+                          >
+                            <Copy className="h-4 w-4" />
+                            Copier le lien
+                          </Button>
+                          <Button
+                            asChild
+                            variant="outline"
+                            className="rounded-full bg-white"
+                          >
+                            <a
+                              href={email.accessUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              <ExternalLink className="h-4 w-4" />
+                              Ouvrir le lien
+                            </a>
+                          </Button>
+                        </>
+                      )}
                       <Button
                         asChild
                         variant="outline"

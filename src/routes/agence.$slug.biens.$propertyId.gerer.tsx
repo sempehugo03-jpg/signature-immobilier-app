@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Clipboard,
   Copy,
+  ExternalLink,
   FileText,
   Link2,
   LogOut,
@@ -36,9 +37,7 @@ import {
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
 
-export const Route = createFileRoute(
-  "/agence/$slug/biens/$propertyId/gerer",
-)({
+export const Route = createFileRoute("/agence/$slug/biens/$propertyId/gerer")({
   head: () => ({
     meta: [{ title: "Gérer le bien - Signature Immobilier" }],
   }),
@@ -51,6 +50,8 @@ function AgencyPropertyDetailRoute() {
   const [property, setProperty] = useState<AgencyProperty | null>(null);
   const [feedback, setFeedback] = useState("");
   const [manualSellerInviteLink, setManualSellerInviteLink] = useState("");
+  const [manualSellerInviteCopied, setManualSellerInviteCopied] =
+    useState(false);
   const [sellerError, setSellerError] = useState("");
   const [sellerForm, setSellerForm] = useState({
     firstName: "",
@@ -134,6 +135,7 @@ function AgencyPropertyDetailRoute() {
   async function onCreateSellerSpace(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     if (!agency || !property) return;
+    setManualSellerInviteCopied(false);
     if (!isValidEmail(sellerForm.email)) {
       setSellerError("Email invalide.");
       return;
@@ -157,6 +159,7 @@ function AgencyPropertyDetailRoute() {
 
       if (sent.sent) {
         setManualSellerInviteLink("");
+        setManualSellerInviteCopied(false);
         setFeedback("Espace vendeur créé. Email d’invitation envoyé.");
         return;
       }
@@ -165,6 +168,7 @@ function AgencyPropertyDetailRoute() {
     }
 
     setManualSellerInviteLink(result.email.accessUrl ?? "");
+    setManualSellerInviteCopied(false);
     setFeedback(
       "Invitation vendeur créée. Email non envoyé : configuration email manquante.",
     );
@@ -177,6 +181,22 @@ function AgencyPropertyDetailRoute() {
     setFeedback("Lien vendeur copié.");
   }
 
+  async function onCopyManualSellerInviteLink() {
+    if (!manualSellerInviteLink) return;
+    await navigator.clipboard?.writeText(manualSellerInviteLink);
+    setManualSellerInviteCopied(true);
+  }
+
+  function onOpenManualSellerInviteLink() {
+    if (!manualSellerInviteLink) return;
+    const opened = window.open(
+      manualSellerInviteLink,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (opened) opened.opener = null;
+  }
+
   return (
     <SaasShell action={<LogoutLink />}>
       <SaasHero
@@ -187,7 +207,11 @@ function AgencyPropertyDetailRoute() {
       />
 
       <section className="mx-auto max-w-6xl px-5 pb-16 md:px-8">
-        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
+        <Button
+          asChild
+          variant="outline"
+          className="mb-7 rounded-full bg-white"
+        >
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour aux biens
@@ -204,8 +228,35 @@ function AgencyPropertyDetailRoute() {
           <div className="mb-7 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             {feedback}
             {manualSellerInviteLink && (
-              <div className="mt-2 break-all font-medium">
-                Lien d’invitation vendeur à copier : {manualSellerInviteLink}
+              <div className="mt-3 rounded-2xl bg-white/80 p-3">
+                <div className="break-all font-medium">
+                  Lien d’invitation vendeur à copier : {manualSellerInviteLink}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={() => void onCopyManualSellerInviteLink()}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copier le lien
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={onOpenManualSellerInviteLink}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Ouvrir le lien
+                  </Button>
+                </div>
+                {manualSellerInviteCopied && (
+                  <p className="mt-2 text-xs font-medium">Lien copié.</p>
+                )}
               </div>
             )}
           </div>
@@ -222,7 +273,10 @@ function AgencyPropertyDetailRoute() {
               <StatusBadge status={property.publicStatus} />
               <span className="text-sm text-primary/45">{property.city}</span>
             </div>
-            <form className="mt-7 grid gap-4 md:grid-cols-2" onSubmit={onSaveInfo}>
+            <form
+              className="mt-7 grid gap-4 md:grid-cols-2"
+              onSubmit={onSaveInfo}
+            >
               <Field label="Titre du bien" className="md:col-span-2">
                 <Input
                   value={property.title}
@@ -308,7 +362,10 @@ function AgencyPropertyDetailRoute() {
                 <Textarea
                   value={property.description}
                   onChange={(event) =>
-                    setProperty({ ...property, description: event.target.value })
+                    setProperty({
+                      ...property,
+                      description: event.target.value,
+                    })
                   }
                   disabled={agency.status !== "active"}
                   className="min-h-28"
@@ -509,7 +566,10 @@ function AgencyPropertyDetailRoute() {
                 </span>
               ))}
             </div>
-            <form className="mt-5 flex flex-col gap-3 sm:flex-row" onSubmit={onAddDocument}>
+            <form
+              className="mt-5 flex flex-col gap-3 sm:flex-row"
+              onSubmit={onAddDocument}
+            >
               <Input
                 value={newDocument}
                 onChange={(event) => setNewDocument(event.target.value)}

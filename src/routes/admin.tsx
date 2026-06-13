@@ -8,6 +8,7 @@ import {
 import {
   ArrowRight,
   Building2,
+  Copy,
   Eye,
   ExternalLink,
   Plus,
@@ -166,6 +167,7 @@ function AdminDashboard() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [feedback, setFeedback] = useState("");
   const [manualAccessLink, setManualAccessLink] = useState("");
+  const [manualAccessCopied, setManualAccessCopied] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState({
     name: "",
@@ -217,6 +219,7 @@ function AdminDashboard() {
       !isValidEmail(form.managerEmail)
     ) {
       setManualAccessLink("");
+      setManualAccessCopied(false);
       setFeedback("Email invalide.");
       return;
     }
@@ -247,9 +250,13 @@ function AdminDashboard() {
     setShowCreateForm(false);
     if (result.sent) {
       setManualAccessLink("");
-      setFeedback("Agence créée en mode démo. Email d’invitation envoyé au patron.");
+      setManualAccessCopied(false);
+      setFeedback(
+        "Agence créée en mode démo. Email d’invitation envoyé au patron.",
+      );
     } else {
       setManualAccessLink(email.accessUrl ?? "");
+      setManualAccessCopied(false);
       setFeedback(
         "Agence créée en mode démo. Invitation créée. Email non envoyé : configuration email manquante.",
       );
@@ -259,6 +266,7 @@ function AdminDashboard() {
 
   async function onActivate(agency: Agency) {
     setManualAccessLink("");
+    setManualAccessCopied(false);
     const managers = getManagers(agency.id).filter(
       (manager) => manager.status !== "disabled",
     );
@@ -293,9 +301,12 @@ function AdminDashboard() {
 
     const sentCount = results.filter((result) => result.sent).length;
     if (sentCount) {
+      setManualAccessLink("");
+      setManualAccessCopied(false);
       setFeedback("Agence activée. Email envoyé au(x) patron(s).");
     } else {
       setManualAccessLink(emails[0]?.accessUrl ?? "");
+      setManualAccessCopied(false);
       setFeedback(
         "Agence activée. Email non envoyé : configuration email manquante.",
       );
@@ -306,6 +317,7 @@ function AdminDashboard() {
   function onDisable(agency: Agency) {
     disableAgency(agency.id);
     setManualAccessLink("");
+    setManualAccessCopied(false);
     setFeedback("Agence désactivée.");
     refresh();
   }
@@ -320,8 +332,25 @@ function AdminDashboard() {
     }
     removeAgency(agency.id);
     setManualAccessLink("");
+    setManualAccessCopied(false);
     setFeedback("Agence retirée.");
     refresh();
+  }
+
+  async function onCopyManualAccessLink() {
+    if (!manualAccessLink) return;
+    await navigator.clipboard?.writeText(manualAccessLink);
+    setManualAccessCopied(true);
+  }
+
+  function onOpenManualAccessLink() {
+    if (!manualAccessLink) return;
+    const opened = window.open(
+      manualAccessLink,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (opened) opened.opener = null;
   }
 
   return (
@@ -352,8 +381,33 @@ function AdminDashboard() {
           <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-700">
             {feedback}
             {manualAccessLink && (
-              <div className="mt-2 break-all font-medium">
-                Lien d’accès à copier : {manualAccessLink}
+              <div className="mt-3 rounded-2xl border border-emerald-100 bg-white/70 p-3">
+                <div className="break-all font-medium">
+                  Lien d’accès à copier : {manualAccessLink}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={onCopyManualAccessLink}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copier le lien
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={onOpenManualAccessLink}
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Ouvrir le lien
+                  </Button>
+                </div>
+                {manualAccessCopied && (
+                  <div className="mt-2 text-sm font-medium">Lien copié.</div>
+                )}
               </div>
             )}
           </div>

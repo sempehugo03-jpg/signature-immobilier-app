@@ -11,11 +11,7 @@ export type AgencyStatus = "demo" | "active" | "disabled";
 export type AgencyPlan = "demo" | "pilot";
 export type TeamRole = "manager" | "agent";
 export type TeamMemberStatus = "invited" | "active" | "disabled";
-export type AccessTokenType =
-  | "manager"
-  | "agent"
-  | "seller"
-  | InviteAccessType;
+export type AccessTokenType = "manager" | "agent" | "seller" | InviteAccessType;
 export type AgencyLeadStatus = "Nouveau" | "Rappelé" | "Converti" | "Perdu";
 
 export type AgencyFeatures = {
@@ -182,7 +178,8 @@ const REMOVED_AGENCIES_KEY = "signature_saas_removed_agencies";
 const TEAM_KEY = "signature_saas_team_members";
 const PROPERTIES_KEY = "signature_saas_properties";
 const LEADS_KEY = "signature_saas_leads";
-const TOKENS_KEY = "signature_saas_access_tokens";
+export const ACCESS_TOKENS_KEY = "signature_access_tokens";
+const LEGACY_TOKENS_KEY = "signature_saas_access_tokens";
 const ACCESS_SESSION_KEY = "signature_saas_current_access";
 const STORAGE_RESET_NOTICE_KEY = "signature_saas_storage_reset";
 
@@ -344,12 +341,7 @@ export function removeAgency(id: string) {
       .map(coerceProperty)
       .filter((property) => property.agencyId !== id),
   );
-  writeStored(
-    TOKENS_KEY,
-    readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
-      .map(coerceAccessToken)
-      .filter((token) => token.agencyId !== id),
-  );
+  deleteAccessTokensForAgency(id);
   if (agency) {
     writeStored(
       LEADS_KEY,
@@ -469,12 +461,7 @@ export function deleteTeamMember(memberId: string) {
     .map(coerceTeamMember)
     .filter((member) => member.id !== memberId);
   writeStored(TEAM_KEY, nextMembers);
-  writeStored(
-    TOKENS_KEY,
-    readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
-      .map(coerceAccessToken)
-      .filter((token) => token.teamMemberId !== memberId),
-  );
+  deleteAccessTokensForMember(memberId);
   return nextMembers;
 }
 
@@ -494,7 +481,7 @@ export function getAgencyLinks(slug: string): AgencyLinks {
 }
 
 export function getAbsoluteAgencyLinks(slug: string) {
-  const origin = getPublicAppUrl();
+  const origin = getAppBaseUrl();
   const links = getAgencyLinks(slug);
   return {
     demo: `${origin}${links.demo}`,
@@ -562,7 +549,7 @@ export function getSellerAccessLink(property: AgencyProperty) {
 }
 
 export function getAgencySellerAccessUrl(agency: Agency, sellerToken: string) {
-  return `${getPublicAppUrl()}/agence/${encodeURIComponent(
+  return `${getAppBaseUrl()}/agence/${encodeURIComponent(
     agency.slug,
   )}/vendeur/${encodeURIComponent(sellerToken)}`;
 }
@@ -584,22 +571,21 @@ export function createSellerInviteForProperty(
   seller: SellerInviteInput,
 ) {
   const sellerToken = property.sellerToken || generateAccessTokenValue();
-  const updatedProperty =
-    saveAgencyProperty({
-      ...property,
-      sellerToken,
-      sellerFirstName: seller.firstName.trim(),
-      sellerLastName: seller.lastName.trim(),
-      sellerEmail: cleanEmail(seller.email),
-      sellerPhone: seller.phone.trim(),
-    }).find((item) => item.id === property.id) ?? {
-      ...property,
-      sellerToken,
-      sellerFirstName: seller.firstName.trim(),
-      sellerLastName: seller.lastName.trim(),
-      sellerEmail: cleanEmail(seller.email),
-      sellerPhone: seller.phone.trim(),
-    };
+  const updatedProperty = saveAgencyProperty({
+    ...property,
+    sellerToken,
+    sellerFirstName: seller.firstName.trim(),
+    sellerLastName: seller.lastName.trim(),
+    sellerEmail: cleanEmail(seller.email),
+    sellerPhone: seller.phone.trim(),
+  }).find((item) => item.id === property.id) ?? {
+    ...property,
+    sellerToken,
+    sellerFirstName: seller.firstName.trim(),
+    sellerLastName: seller.lastName.trim(),
+    sellerEmail: cleanEmail(seller.email),
+    sellerPhone: seller.phone.trim(),
+  };
   const access = createInviteAccessToken({
     type: "seller_invite",
     agencyId: agency.id,
@@ -648,6 +634,71 @@ export function updateAgencyLeadStatus(id: string, status: AgencyLeadStatus) {
   return nextLeads;
 }
 
+export function getAccessTokens() {
+  const tokens = readStored<Partial<AccessToken>[]>(ACCESS_TOKENS_KEY, []).map(
+    coerceAccessToken,
+  );
+  const legacyTokens = readStored<Partial<AccessToken>[]>(
+    LEGACY_TOKENS_KEY,
+    [],
+  ).map(coerceAccessToken);
+  const byToken = new Map<string, AccessToken>();
+
+  [...legacyTokens, ...tokens].forEach((token) => {
+    if (token.token) byToken.set(token.token, token);
+  });
+
+  const nextTokens = Array.from(byToken.values());
+  const hasLegacyTokenToMigrate = legacyTokens.some(
+    (legacyToken) =>
+      legacyToken.token &&
+      !tokens.some((token) => token.token === legacyToken.token),
+  );
+  if (
+    legacyTokens.length &&
+    (hasLegacyTokenToMigrate || nextTokens.length !== tokens.length)
+  ) {
+    saveAccessTokens(nextTokens);
+  }
+
+  return nextTokens;
+}
+
+export function saveAccessTokens(tokens: AccessToken[]) {
+  writeStored(ACCESS_TOKENS_KEY, tokens.map(coerceAccessToken));
+}
+
+export function getAccessTokenByToken(tokenValue: string) {
+  return (
+    getAccessTokens().find((token) => token.token === tokenValue) ??
+    decodeAccessToken(tokenValue)
+  );
+}
+
+export function markAccessTokenUsed(
+  tokenValue: string,
+  data: Partial<AccessToken> = {},
+) {
+  const usedAt = data.usedAt ?? new Date().toISOString();
+  const nextTokens = getAccessTokens().map((token) =>
+    token.token === tokenValue ? { ...token, ...data, usedAt } : token,
+  );
+  saveAccessTokens(nextTokens);
+  return nextTokens.find((token) => token.token === tokenValue) ?? null;
+}
+
+export function deleteAccessTokensForMember(memberId: string) {
+  saveAccessTokens(
+    getAccessTokens().filter((token) => token.teamMemberId !== memberId),
+  );
+}
+
+export function deleteAccessTokensForAgency(agencyId: string) {
+  saveAccessTokens(
+    getAccessTokens().filter((token) => token.agencyId !== agencyId),
+  );
+}
+
 export function createAccessToken(
   data: Pick<AccessToken, "type" | "agencyId"> &
     Partial<
@@ -677,10 +728,8 @@ export function createAccessToken(
     email: data.email ? cleanEmail(data.email) : undefined,
     createdAt,
   };
-  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
-    coerceAccessToken,
-  );
-  writeStored(TOKENS_KEY, [
+  const tokens = getAccessTokens();
+  saveAccessTokens([
     access,
     ...tokens.filter(
       (token) =>
@@ -700,11 +749,7 @@ export function createInviteAccessToken(
     Partial<
       Pick<
         AccessToken,
-        | "propertyId"
-        | "teamMemberId"
-        | "sellerId"
-        | "sellerToken"
-        | "expiresAt"
+        "propertyId" | "teamMemberId" | "sellerId" | "sellerToken" | "expiresAt"
       >
     >,
 ) {
@@ -726,10 +771,8 @@ export function createInviteAccessToken(
     createdAt,
     expiresAt: data.expiresAt,
   };
-  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
-    coerceAccessToken,
-  );
-  writeStored(TOKENS_KEY, [
+  const tokens = getAccessTokens();
+  saveAccessTokens([
     access,
     ...tokens.filter(
       (token) =>
@@ -747,11 +790,7 @@ export function createInviteAccessToken(
 }
 
 export function getAccessToken(tokenValue: string) {
-  const stored = readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
-    .map(coerceAccessToken)
-    .find((token) => token.token === tokenValue);
-  if (stored) return stored;
-  return decodeAccessToken(tokenValue);
+  return getAccessTokenByToken(tokenValue);
 }
 
 export function verifyAgencyAccessToken(tokenValue: string) {
@@ -772,9 +811,7 @@ export function verifyAgencyAccessToken(tokenValue: string) {
 }
 
 export function getInviteAccessUrl(access: AccessToken) {
-  return `${getPublicAppUrl()}/creer-acces/${encodeURIComponent(
-    access.token,
-  )}`;
+  return `${getAppBaseUrl()}/creer-acces/${encodeURIComponent(access.token)}`;
 }
 
 export function createTeamMemberInviteEmail(
@@ -858,7 +895,7 @@ export function activateInviteAccess(tokenValue: string, password: string) {
   if (lookup.status !== "valid") return lookup;
 
   const now = new Date().toISOString();
-  const activatedAccess = updateStoredAccessToken(lookup.access.id, {
+  const activatedAccess = markAccessTokenUsed(lookup.access.token, {
     usedAt: now,
     passwordHash: createPilotPasswordMarker(password),
   });
@@ -916,7 +953,10 @@ export function getCurrentAgencyAccess(agencyId?: string) {
   if (agencyId && access.agencyId !== agencyId) return null;
   const agency = getAgencyById(access.agencyId);
   if (!agency || agency.status === "disabled") return null;
-  if (access.teamMemberId && (access.type === "manager" || access.type === "agent")) {
+  if (
+    access.teamMemberId &&
+    (access.type === "manager" || access.type === "agent")
+  ) {
     const member = getTeamMembers(access.agencyId).find(
       (item) => item.id === access.teamMemberId,
     );
@@ -926,9 +966,7 @@ export function getCurrentAgencyAccess(agencyId?: string) {
 }
 
 export function getAgencyAccessUrl(access: AccessToken) {
-  return `${getPublicAppUrl()}/acces/agence/${encodeURIComponent(
-    access.token,
-  )}`;
+  return `${getAppBaseUrl()}/acces/agence/${encodeURIComponent(access.token)}`;
 }
 
 export function createDemoProperties(agency: Agency): AgencyProperty[] {
@@ -1502,28 +1540,18 @@ function invalidInviteResult(
   };
 }
 
-function updateStoredAccessToken(id: string, data: Partial<AccessToken>) {
-  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
-    coerceAccessToken,
-  );
-  const nextTokens = tokens.map((token) =>
-    token.id === id ? { ...token, ...data } : token,
-  );
-  writeStored(TOKENS_KEY, nextTokens);
-  return nextTokens.find((token) => token.id === id) ?? null;
-}
-
 function createPilotPasswordMarker(password: string) {
   return `pilot:${password.length}:${randomId()}`;
 }
 
-function getPublicAppUrl() {
+export function getAppBaseUrl() {
   const env = import.meta.env as Record<string, string | undefined>;
-  return (
-    env.NEXT_PUBLIC_APP_URL ||
-    env.VITE_APP_URL ||
-    "https://signature-immobilier-app.vercel.app"
-  ).replace(/\/$/, "");
+  if (env.NEXT_PUBLIC_APP_URL)
+    return env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
+  if (typeof window !== "undefined" && window.location.origin) {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return "https://signature-immobilier-app.vercel.app";
 }
 
 function randomId() {
