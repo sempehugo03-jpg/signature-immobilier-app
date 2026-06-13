@@ -6,7 +6,6 @@ import {
 } from "@tanstack/react-router";
 import {
   ArrowRight,
-  Building2,
   CalendarDays,
   FileText,
   Home,
@@ -83,7 +82,9 @@ function AgencyPortal({ slug }: { slug: string }) {
       <SaasShell action={<LogoutLink />}>
         <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8">
           <SaasCard className="p-8 md:p-12">
-            <h1 className="font-display text-4xl">Portail introuvable</h1>
+            <h1 className="font-display text-4xl">
+              Cette agence n’est plus active sur Signature Immobilier.
+            </h1>
             <Button asChild className="mt-6 rounded-full">
               <Link to="/">Retour à l’accueil</Link>
             </Button>
@@ -116,7 +117,17 @@ function AgencyPortal({ slug }: { slug: string }) {
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
         {isDemo && (
-          <StatusMessage text="Votre agence est actuellement en version démo." />
+          <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm leading-relaxed text-amber-800">
+            Votre agence est actuellement en version démo.{" "}
+            <Link
+              to="/demo-agence/$slug"
+              params={{ slug: agency.slug }}
+              className="font-medium underline"
+            >
+              Ouvrir la démo complète
+            </Link>
+            .
+          </div>
         )}
         {isDisabled && (
           <StatusMessage text="Votre portail est actuellement désactivé. Contactez Signature Immobilier pour le réactiver." />
@@ -157,29 +168,22 @@ function AgencyPortal({ slug }: { slug: string }) {
 
         <SaasCard className="mt-7 p-6 md:p-8">
           <SectionTitle
-            title="Vue agence"
+            title="Biens"
             description="Vous modifiez ici uniquement les informations visibles par vos clients vendeurs. Votre CRM reste votre outil interne."
             action={
-              isActive ? (
-                <Button
-                  type="button"
-                  className="rounded-full"
-                  onClick={() => setShowCreateForm((value) => !value)}
-                >
-                  <Plus className="h-4 w-4" />
-                  Ajouter un bien
-                </Button>
-              ) : (
-                <Button
-                  type="button"
-                  className="rounded-full"
-                  onClick={() => setLockedOpen(true)}
-                  disabled={isDisabled}
-                >
-                  <Plus className="h-4 w-4" />
-                  Ajouter un bien
-                </Button>
-              )
+              <Button
+                type="button"
+                className="rounded-full"
+                onClick={
+                  isActive
+                    ? () => setShowCreateForm((value) => !value)
+                    : () => setLockedOpen(true)
+                }
+                disabled={isDisabled}
+              >
+                <Plus className="h-4 w-4" />
+                Créer une annonce
+              </Button>
             }
           />
 
@@ -204,6 +208,7 @@ function AgencyPortal({ slug }: { slug: string }) {
             {properties.map((property) => (
               <PropertyCard
                 key={property.id}
+                agencySlug={agency.slug}
                 property={property}
                 isActive={isActive}
                 onLocked={() => setLockedOpen(true)}
@@ -259,7 +264,7 @@ function AgencyPortal({ slug }: { slug: string }) {
                     <StatusBadge status={lead.status} />
                   </div>
                   <div className="mt-2 text-sm text-primary/55">
-                    {lead.propertyType} - {lead.propertyCity}
+                    {lead.propertyType} — {lead.propertyCity}
                   </div>
                 </div>
               ))}
@@ -274,7 +279,7 @@ function AgencyPortal({ slug }: { slug: string }) {
           <SaasCard className="p-6 md:p-8">
             <SectionTitle
               title="Équipe"
-              description="Les gérants peuvent ajouter ou supprimer des gérants et agents depuis la page équipe."
+              description="Les patrons peuvent ajouter, supprimer, désactiver ou réactiver les membres depuis la page équipe."
               action={
                 <Button
                   asChild={isActive}
@@ -300,13 +305,9 @@ function AgencyPortal({ slug }: { slug: string }) {
               }
             />
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              <Metric label="Gérants" value={`${managers.length}`} />
+              <Metric label="Patrons" value={`${managers.length}`} />
               <Metric label="Agents" value={`${agents.length}`} />
             </div>
-            <p className="mt-5 text-sm leading-relaxed text-primary/55">
-              Vos agents gardent leurs habitudes. Vos vendeurs découvrent une
-              expérience plus claire, plus moderne et plus rassurante.
-            </p>
           </SaasCard>
         </div>
       </section>
@@ -394,8 +395,8 @@ function CreatePropertyForm({
       report: "Aucun compte rendu de visite disponible pour le moment.",
       description: form.description,
       image: agencyConfig.properties[0].coverImage,
-      sellerToken: `seller-${Date.now()}`,
-      documents: ["Mandat", "Diagnostics", "Offre", "Compromis"],
+      sellerToken: "",
+      documents: ["Mandat", "Diagnostics"],
     });
     onCreated(nextProperties);
   }
@@ -485,10 +486,12 @@ function CreatePropertyForm({
 }
 
 function PropertyCard({
+  agencySlug,
   property,
   isActive,
   onLocked,
 }: {
+  agencySlug: string;
   property: AgencyProperty;
   isActive: boolean;
   onLocked: () => void;
@@ -509,21 +512,33 @@ function PropertyCard({
           {property.title}
         </h3>
         <p className="mt-2 text-sm text-primary/55">
-          {property.price} - {property.surface} - {property.rooms} pièces
+          {property.price} · {property.surface} · {property.rooms} pièces
         </p>
         <p className="mt-4 text-sm leading-relaxed text-primary/55">
           {property.description}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            className="rounded-full bg-white"
-            onClick={isActive ? undefined : onLocked}
-          >
-            <FileText className="h-4 w-4" />
-            Générer un accès vendeur
-          </Button>
+          {isActive ? (
+            <Button asChild className="rounded-full">
+              <Link
+                to="/agence/$slug/biens/$propertyId/gerer"
+                params={{ slug: agencySlug, propertyId: property.id }}
+              >
+                Gérer
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          ) : (
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full bg-white"
+              onClick={onLocked}
+            >
+              <FileText className="h-4 w-4" />
+              Gérer
+            </Button>
+          )}
         </div>
       </div>
     </div>

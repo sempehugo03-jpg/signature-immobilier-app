@@ -1,12 +1,5 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import {
-  ArrowLeft,
-  Copy,
-  Mail,
-  Power,
-  PowerOff,
-  RotateCcw,
-} from "lucide-react";
+import { ArrowLeft, Copy, Mail, Power, PowerOff, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { AgencyTeamManager } from "@/components/agency-team-manager";
@@ -25,12 +18,13 @@ import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
 import {
   activateAgency,
   buildManagerActivationEmail,
-  deactivateAgency,
   disableAgency,
   getAbsoluteAgencyLinks,
+  getActiveManagers,
   getAgents,
   getAgencyBySlug,
   getManagers,
+  removeAgency,
   updateAgency,
   type Agency,
   type EmailContent,
@@ -44,6 +38,7 @@ export const Route = createFileRoute("/admin/agencies/$slug")({
 });
 
 const adminSessionKey = "signature_admin_access";
+const adminFlashKey = "signature_admin_flash";
 
 function AdminAgencyRoute() {
   const { slug } = Route.useParams();
@@ -96,9 +91,16 @@ function AdminAgencyRoute() {
 
   async function onActivate() {
     if (!agency) return;
-    const managers = getManagers(agency.id);
+    setEmailPreviews([]);
+    const managers = getActiveManagers(agency.id);
     if (!managers.length) {
-      setFeedback("Ajoutez au moins un gérant avant d’activer cette agence.");
+      setFeedback("Ajoutez au moins un patron avant d’activer l’agence.");
+      return;
+    }
+    if (!agency.estimationEmail) {
+      setFeedback(
+        "Renseignez l’email de réception des estimations avant d’activer.",
+      );
       return;
     }
 
@@ -122,7 +124,7 @@ function AdminAgencyRoute() {
             },
           });
         } catch (error) {
-          console.info("Agence activée. Email non envoyé.", error);
+          console.info("Email non envoyé : RESEND_API_KEY manquante", error);
           return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
         }
       }),
@@ -131,16 +133,9 @@ function AdminAgencyRoute() {
     const sentCount = results.filter((result) => result.sent).length;
     setFeedback(
       sentCount
-        ? `Agence activée. ${sentCount} email(s) envoyé(s) aux gérants.`
+        ? "Agence activée. Email envoyé au(x) patron(s)."
         : "Agence activée. Email non envoyé : configuration email manquante.",
     );
-  }
-
-  function onDeactivate() {
-    if (!agency) return;
-    const updated = deactivateAgency(agency.id);
-    setAgency(updated);
-    setFeedback("Agence repassée en version démo.");
   }
 
   function onDisable() {
@@ -148,6 +143,20 @@ function AdminAgencyRoute() {
     const updated = disableAgency(agency.id);
     setAgency(updated);
     setFeedback("Agence désactivée.");
+  }
+
+  function onRemove() {
+    if (!agency) return;
+    if (
+      !window.confirm(
+        "Retirer cette agence ? Cette action supprimera l’agence de votre espace admin.",
+      )
+    ) {
+      return;
+    }
+    removeAgency(agency.id);
+    window.sessionStorage.setItem(adminFlashKey, "Agence retirée.");
+    navigate({ to: "/admin", replace: true });
   }
 
   async function copy(value: string, label: string) {
@@ -162,7 +171,9 @@ function AdminAgencyRoute() {
       <SaasShell action={<AdminLogoutButton onClick={onLogout} />}>
         <section className="mx-auto max-w-3xl px-5 py-16 text-center md:px-8">
           <SaasCard className="p-8 md:p-12">
-            <h1 className="font-display text-4xl">Agence introuvable</h1>
+            <h1 className="font-display text-4xl">
+              Cette agence n’est plus active sur Signature Immobilier.
+            </h1>
             <Button asChild className="mt-6 rounded-full">
               <Link to="/admin">Retour à l’admin</Link>
             </Button>
@@ -181,7 +192,7 @@ function AdminAgencyRoute() {
       <SaasHero
         eyebrow="Contrôle agence"
         title={agency.name}
-        description="Activez le portail, gérez les accès équipe et copiez les liens utiles pour la démo et l’espace agence."
+        description="Activez le portail, gérez les accès équipe et gardez les liens utiles au même endroit."
         action={
           <Button asChild variant="outline" className="rounded-full bg-white">
             <Link to="/admin">
@@ -199,13 +210,25 @@ function AdminAgencyRoute() {
               <StatusBadge status={agency.status} />
               <span className="text-sm text-primary/45">{agency.city}</span>
             </div>
+            {agency.logoUrl && (
+              <img
+                src={agency.logoUrl}
+                alt={`Logo ${agency.name}`}
+                className="mt-6 max-h-16 max-w-full object-contain"
+              />
+            )}
             <div className="mt-6 grid gap-3 text-sm text-primary/60">
+              <InfoRow label="Nom" value={agency.name} />
+              <InfoRow label="Ville" value={agency.city} />
+              <InfoRow label="Téléphone" value={agency.phone} />
+              <InfoRow label="Couleur" value={agency.primaryColor} />
               <InfoRow
                 label="Email estimation"
                 value={agency.estimationEmail}
               />
-              <InfoRow label="Gérants" value={`${managers.length}`} />
+              <InfoRow label="Patrons / Gérants" value={`${managers.length}`} />
               <InfoRow label="Agents" value={`${agents.length}`} />
+              <InfoRow label="Créée le" value={formatDate(agency.createdAt)} />
               <InfoRow
                 label="Activée le"
                 value={
@@ -228,26 +251,26 @@ function AdminAgencyRoute() {
                 type="button"
                 variant="outline"
                 className="rounded-full bg-white"
-                onClick={onDeactivate}
+                onClick={onDisable}
               >
-                <RotateCcw className="h-4 w-4" />
-                Repasser en démo
+                <PowerOff className="h-4 w-4" />
+                Désactiver l’agence
               </Button>
               <Button
                 type="button"
                 variant="outline"
                 className="rounded-full bg-white text-red-700 hover:text-red-700"
-                onClick={onDisable}
+                onClick={onRemove}
               >
-                <PowerOff className="h-4 w-4" />
-                Désactiver
+                <Trash2 className="h-4 w-4" />
+                Retirer l’agence
               </Button>
             </div>
           </SaasCard>
 
           <SaasCard className="p-6 md:p-8">
             <SectionTitle
-              title="Liens"
+              title="Liens utiles"
               description="Un lien de démo avant signature, puis un lien unique d’espace agence après activation."
             />
             <div className="mt-6 space-y-3">
@@ -341,8 +364,8 @@ function AdminAgencyRoute() {
           {emailPreviews.length > 0 && (
             <SaasCard className="p-6 md:p-8">
               <SectionTitle
-                title="Email gérant"
-                description="Si l’envoi automatique n’est pas configuré, vous pouvez ouvrir l’email manuellement."
+                title="Email patron"
+                description="Si l’envoi automatique n’est pas configuré, copiez le lien d’accès ou ouvrez l’email manuellement."
               />
               <div className="mt-6 space-y-4">
                 {emailPreviews.map((email) => (
@@ -353,6 +376,11 @@ function AdminAgencyRoute() {
                     <div className="text-sm font-medium">
                       {email.to.join(", ")}
                     </div>
+                    {email.accessUrl && (
+                      <div className="mt-3 break-all rounded-2xl bg-white p-3 text-xs text-primary/60">
+                        Lien d’accès : {email.accessUrl}
+                      </div>
+                    )}
                     <pre className="mt-4 max-h-60 overflow-auto whitespace-pre-wrap rounded-2xl bg-white p-4 text-xs leading-relaxed text-primary/65">
                       {email.body}
                     </pre>

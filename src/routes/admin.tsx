@@ -5,7 +5,7 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { ArrowRight, Building2, Plus } from "lucide-react";
+import { ArrowRight, Building2, Plus, Trash2 } from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
@@ -19,14 +19,19 @@ import {
 } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
 import {
   activateAgency,
+  addTeamMember,
+  buildManagerActivationEmail,
   createAgency,
   disableAgency,
   generateAgencySlug,
+  getActiveManagers,
   getAgents,
   getAgencies,
   getManagers,
+  removeAgency,
   type Agency,
 } from "@/lib/agency-saas";
 
@@ -44,6 +49,7 @@ export const Route = createFileRoute("/admin")({
 });
 
 const adminSessionKey = "signature_admin_access";
+const adminFlashKey = "signature_admin_flash";
 
 function AdminRoute() {
   const pathname = useRouterState({
@@ -106,8 +112,8 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
             Admin Hugo
           </h1>
           <p className="mt-3 text-sm leading-relaxed text-primary/55">
-            Entrez le code admin pour créer, activer et désactiver les portails
-            agences.
+            Entrez le code admin pour créer, activer, désactiver et retirer les
+            portails agences.
           </p>
           <form className="mt-6 space-y-4" onSubmit={onSubmit}>
             <Field label="Code admin">
@@ -133,23 +139,47 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
 function AdminDashboard() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [feedback, setFeedback] = useState("");
+  const [manualAccessLink, setManualAccessLink] = useState("");
+  const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState({
     name: "",
     city: "",
     estimationEmail: "",
-    logoUrl: "",
+    managerFirstName: "",
+    managerLastName: "",
+    managerEmail: "",
     phone: "",
+    logoUrl: "",
     primaryColor: "#111111",
   });
 
   useEffect(() => {
     refresh();
+    const flash = window.sessionStorage.getItem(adminFlashKey);
+    if (flash) {
+      setFeedback(flash);
+      window.sessionStorage.removeItem(adminFlashKey);
+    }
   }, []);
 
   const draftSlug = useMemo(() => generateAgencySlug(form.name), [form.name]);
 
   function refresh() {
     setAgencies(getAgencies());
+  }
+
+  function resetCreateForm() {
+    setForm({
+      name: "",
+      city: "",
+      estimationEmail: "",
+      managerFirstName: "",
+      managerLastName: "",
+      managerEmail: "",
+      phone: "",
+      logoUrl: "",
+      primaryColor: "#111111",
+    });
   }
 
   function onCreateAgency(event: FormEvent<HTMLFormElement>) {
@@ -162,32 +192,87 @@ function AdminDashboard() {
       phone: form.phone,
       primaryColor: form.primaryColor,
     });
-    setForm({
-      name: "",
-      city: "",
-      estimationEmail: "",
-      logoUrl: "",
+    addTeamMember(agency.id, {
+      firstName: form.managerFirstName,
+      lastName: form.managerLastName,
+      email: form.managerEmail,
       phone: "",
-      primaryColor: "#111111",
+      role: "manager",
+      status: "active",
     });
-    setFeedback(`${agency.name} a été créée en mode démo.`);
+    resetCreateForm();
+    setShowCreateForm(false);
+    setManualAccessLink("");
+    setFeedback("Agence créée en mode démo.");
     refresh();
   }
 
-  function onActivate(agency: Agency) {
-    const managers = getManagers(agency.id);
+  async function onActivate(agency: Agency) {
+    setManualAccessLink("");
+    const managers = getActiveManagers(agency.id);
     if (!managers.length) {
-      setFeedback("Ajoutez au moins un gérant avant d’activer cette agence.");
+      setFeedback("Ajoutez au moins un patron avant d’activer l’agence.");
       return;
     }
-    activateAgency(agency.id);
-    setFeedback(`${agency.name} est activée.`);
+    if (!agency.estimationEmail) {
+      setFeedback(
+        "Renseignez l’email de réception des estimations avant d’activer.",
+      );
+      return;
+    }
+
+    const updated = activateAgency(agency.id);
+    if (!updated) return;
+    const emails = managers.map((manager) =>
+      buildManagerActivationEmail(updated, manager),
+    );
+    const results = await Promise.all(
+      emails.map(async (email) => {
+        try {
+          return await sendManagerAccessEmail({
+            data: {
+              to: email.to,
+              subject: email.subject,
+              body: email.body,
+            },
+          });
+        } catch (error) {
+          console.info("Email non envoyé : RESEND_API_KEY manquante", error);
+          return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
+        }
+      }),
+    );
+
+    const sentCount = results.filter((result) => result.sent).length;
+    if (sentCount) {
+      setFeedback("Agence activée. Email envoyé au(x) patron(s).");
+    } else {
+      setManualAccessLink(emails[0]?.accessUrl ?? "");
+      setFeedback(
+        "Agence activée. Email non envoyé : configuration email manquante.",
+      );
+    }
     refresh();
   }
 
   function onDisable(agency: Agency) {
     disableAgency(agency.id);
-    setFeedback(`${agency.name} est désactivée.`);
+    setManualAccessLink("");
+    setFeedback("Agence désactivée.");
+    refresh();
+  }
+
+  function onRemove(agency: Agency) {
+    if (
+      !window.confirm(
+        "Retirer cette agence ? Cette action supprimera l’agence de votre espace admin.",
+      )
+    ) {
+      return;
+    }
+    removeAgency(agency.id);
+    setManualAccessLink("");
+    setFeedback("Agence retirée.");
     refresh();
   }
 
@@ -196,45 +281,116 @@ function AdminDashboard() {
       <SaasHero
         eyebrow="Admin Signature"
         title="Portails agences"
-        description="Créez une agence en démo, ajoutez ses gérants, puis activez son portail unique quand elle signe."
+        description="Créez une agence en démo, ajoutez son patron principal, puis activez le même portail quand elle signe."
       />
 
-      <section className="mx-auto grid max-w-7xl gap-7 px-5 pb-16 md:px-8 lg:grid-cols-[0.82fr_1.18fr]">
-        <SaasCard className="p-6 md:p-8">
+      <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <SectionTitle
-            title="Créer une agence"
-            description="Nom, ville et email de réception des estimations suffisent pour préparer une démo."
+            title="Agences"
+            description="Une interface simple pour créer, activer, désactiver ou retirer une agence."
           />
-          <form className="mt-7 grid gap-4" onSubmit={onCreateAgency}>
-            <Field label="Nom de l’agence">
-              <Input
-                value={form.name}
-                onChange={(event) =>
-                  setForm({ ...form, name: event.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label="Ville">
-              <Input
-                value={form.city}
-                onChange={(event) =>
-                  setForm({ ...form, city: event.target.value })
-                }
-                required
-              />
-            </Field>
-            <Field label="Email de réception des estimations">
-              <Input
-                type="email"
-                value={form.estimationEmail}
-                onChange={(event) =>
-                  setForm({ ...form, estimationEmail: event.target.value })
-                }
-                required
-              />
-            </Field>
-            <div className="grid gap-4 sm:grid-cols-2">
+          <Button
+            type="button"
+            className="rounded-full"
+            onClick={() => setShowCreateForm((value) => !value)}
+          >
+            <Plus className="h-4 w-4" />
+            Créer une agence
+          </Button>
+        </div>
+
+        {feedback && (
+          <div className="mt-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm leading-relaxed text-emerald-700">
+            {feedback}
+            {manualAccessLink && (
+              <div className="mt-2 break-all font-medium">
+                Lien d’accès à copier : {manualAccessLink}
+              </div>
+            )}
+          </div>
+        )}
+
+        {showCreateForm && (
+          <SaasCard className="mt-7 p-6 md:p-8">
+            <SectionTitle
+              title="Créer une agence"
+              description="L’agence est créée en mode démo avec son patron principal en une seule étape."
+            />
+            <form
+              className="mt-7 grid gap-4 md:grid-cols-2"
+              onSubmit={onCreateAgency}
+            >
+              <Field label="Nom de l’agence">
+                <Input
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm({ ...form, name: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Ville">
+                <Input
+                  value={form.city}
+                  onChange={(event) =>
+                    setForm({ ...form, city: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field
+                label="Email de réception des estimations"
+                className="md:col-span-2"
+              >
+                <Input
+                  type="email"
+                  value={form.estimationEmail}
+                  onChange={(event) =>
+                    setForm({ ...form, estimationEmail: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <div className="md:col-span-2 mt-2 text-xs font-medium uppercase tracking-[0.18em] text-primary/40">
+                Patron / gérant principal
+              </div>
+              <Field label="Prénom du patron">
+                <Input
+                  value={form.managerFirstName}
+                  onChange={(event) =>
+                    setForm({ ...form, managerFirstName: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Nom du patron">
+                <Input
+                  value={form.managerLastName}
+                  onChange={(event) =>
+                    setForm({ ...form, managerLastName: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Email du patron" className="md:col-span-2">
+                <Input
+                  type="email"
+                  value={form.managerEmail}
+                  onChange={(event) =>
+                    setForm({ ...form, managerEmail: event.target.value })
+                  }
+                  required
+                />
+              </Field>
+              <Field label="Téléphone agence">
+                <Input
+                  value={form.phone}
+                  onChange={(event) =>
+                    setForm({ ...form, phone: event.target.value })
+                  }
+                />
+              </Field>
               <Field label="Logo URL">
                 <Input
                   value={form.logoUrl}
@@ -243,56 +399,39 @@ function AdminDashboard() {
                   }
                 />
               </Field>
-              <Field label="Téléphone">
+              <Field label="Couleur principale">
                 <Input
-                  value={form.phone}
+                  value={form.primaryColor}
                   onChange={(event) =>
-                    setForm({ ...form, phone: event.target.value })
+                    setForm({ ...form, primaryColor: event.target.value })
                   }
                 />
               </Field>
-            </div>
-            <Field label="Couleur principale">
-              <Input
-                value={form.primaryColor}
-                onChange={(event) =>
-                  setForm({ ...form, primaryColor: event.target.value })
-                }
-              />
-            </Field>
-            <div className="rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/55">
-              Slug généré :{" "}
-              <span className="font-medium text-primary">
-                {draftSlug || "agence"}
-              </span>
-            </div>
-            <Button className="rounded-full" size="lg">
-              <Plus className="h-4 w-4" />
-              Créer l’agence
-            </Button>
-          </form>
-        </SaasCard>
+              <div className="rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/55">
+                Slug généré :{" "}
+                <span className="font-medium text-primary">
+                  {draftSlug || "agence"}
+                </span>
+              </div>
+              <div className="md:col-span-2">
+                <Button className="rounded-full" size="lg">
+                  Créer l’agence
+                </Button>
+              </div>
+            </form>
+          </SaasCard>
+        )}
 
-        <div className="space-y-4">
-          <SectionTitle
-            title="Agences"
-            description="Une carte par agence, avec son état, son email estimation et son équipe."
-          />
-          {feedback && (
-            <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-              {feedback}
-            </div>
-          )}
-          <div className="grid gap-4">
-            {agencies.map((agency) => (
-              <AgencyCard
-                key={agency.id}
-                agency={agency}
-                onActivate={() => onActivate(agency)}
-                onDisable={() => onDisable(agency)}
-              />
-            ))}
-          </div>
+        <div className="mt-7 grid gap-4">
+          {agencies.map((agency) => (
+            <AgencyCard
+              key={agency.id}
+              agency={agency}
+              onActivate={() => onActivate(agency)}
+              onDisable={() => onDisable(agency)}
+              onRemove={() => onRemove(agency)}
+            />
+          ))}
         </div>
       </section>
     </>
@@ -303,13 +442,16 @@ function AgencyCard({
   agency,
   onActivate,
   onDisable,
+  onRemove,
 }: {
   agency: Agency;
   onActivate: () => void;
   onDisable: () => void;
+  onRemove: () => void;
 }) {
   const managers = getManagers(agency.id);
   const agents = getAgents(agency.id);
+  const mainManager = managers.find((manager) => manager.status === "active");
 
   return (
     <SaasCard className="p-5 md:p-6">
@@ -324,11 +466,17 @@ function AgencyCard({
           <h3 className="mt-3 font-display text-3xl leading-tight">
             {agency.name}
           </h3>
-          <p className="mt-2 break-words text-sm text-primary/55">
-            {agency.estimationEmail || "Email estimation à compléter"}
-          </p>
+          <div className="mt-3 grid gap-1 text-sm text-primary/55">
+            <p className="break-words">
+              Estimations :{" "}
+              {agency.estimationEmail || "Email estimation à compléter"}
+            </p>
+            <p className="break-words">
+              Patron principal : {mainManager?.email || "À ajouter"}
+            </p>
+          </div>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-primary/50">
-            <span>{managers.length} gérant(s)</span>
+            <span>{managers.length} patron(s)</span>
             <span>{agents.length} agent(s)</span>
           </div>
         </div>
@@ -354,6 +502,15 @@ function AgencyCard({
               Désactiver
             </Button>
           )}
+          <Button
+            type="button"
+            variant="outline"
+            className="rounded-full bg-white text-red-700 hover:text-red-700"
+            onClick={onRemove}
+          >
+            <Trash2 className="h-4 w-4" />
+            Retirer l’agence
+          </Button>
         </div>
       </div>
     </SaasCard>

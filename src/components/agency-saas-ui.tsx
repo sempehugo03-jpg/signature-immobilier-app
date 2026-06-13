@@ -145,15 +145,19 @@ export function StatusBadge({ status }: { status: AgencyStatus | string }) {
   const label =
     status === "active"
       ? "Activé"
-      : status === "demo"
-        ? "Démo"
-        : status === "disabled"
-          ? "Désactivé"
-          : status;
+      : status === "actif"
+        ? "actif"
+        : status === "demo"
+          ? "Démo"
+          : status === "disabled"
+            ? "Désactivé"
+            : status === "désactivé"
+              ? "désactivé"
+              : status;
   const classes =
-    status === "active" || status === "Converti"
+    status === "active" || status === "actif" || status === "Converti"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : status === "disabled" || status === "Perdu"
+      : status === "disabled" || status === "désactivé" || status === "Perdu"
         ? "border-red-200 bg-red-50 text-red-700"
         : status === "Rappelé"
           ? "border-blue-200 bg-blue-50 text-blue-700"
