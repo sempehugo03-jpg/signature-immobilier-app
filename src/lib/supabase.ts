@@ -48,7 +48,7 @@ export function getRoleLabel(role: UserRole) {
 }
 
 export function getDashboardPath(role: UserRole) {
-  if (role === "owner") return "/espace-signature";
+  if (role === "owner") return "/admin";
   if (role === "agency_admin") return "/admin-agence";
   if (role === "agent") return "/agent";
   return "/vendeur";

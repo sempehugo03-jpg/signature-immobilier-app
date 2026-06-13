@@ -597,5 +597,5 @@ export function getActivationDestination(role: UserRole) {
   if (role === "agency_admin") return "/admin-agence";
   if (role === "agent") return "/agent";
   if (role === "seller") return "/vendeur";
-  return "/espace-signature";
+  return "/admin";
 }
