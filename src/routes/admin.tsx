@@ -5,7 +5,14 @@ import {
   useNavigate,
   useRouterState,
 } from "@tanstack/react-router";
-import { ArrowRight, Building2, Plus, Trash2 } from "lucide-react";
+import {
+  ArrowRight,
+  Building2,
+  Eye,
+  ExternalLink,
+  Plus,
+  Trash2,
+} from "lucide-react";
 import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
@@ -30,6 +37,7 @@ import {
   getActiveManagers,
   getAgents,
   getAgencies,
+  getAgencyLinks,
   getManagers,
   removeAgency,
   type Agency,
@@ -288,7 +296,7 @@ function AdminDashboard() {
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <SectionTitle
             title="Agences"
-            description="Une interface simple pour créer, activer, désactiver ou retirer une agence."
+            description="Chaque agence expose sa fiche centrale, sa démo commerciale et son vrai espace agence après activation."
           />
           <Button
             type="button"
@@ -452,6 +460,7 @@ function AgencyCard({
   const managers = getManagers(agency.id);
   const agents = getAgents(agency.id);
   const mainManager = managers.find((manager) => manager.status === "active");
+  const links = getAgencyLinks(agency.slug);
 
   return (
     <SaasCard className="p-5 md:p-6">
@@ -483,7 +492,20 @@ function AgencyCard({
         <div className="flex flex-wrap gap-2">
           <Button asChild variant="outline" className="rounded-full bg-white">
             <Link to="/admin/agencies/$slug" params={{ slug: agency.slug }}>
-              Ouvrir
+              Ouvrir la fiche
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to={links.demo}>
+              <Eye className="h-4 w-4" />
+              Voir la démo
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to={links.portal}>
+              <ExternalLink className="h-4 w-4" />
+              Accéder à l’espace agence
               <ArrowRight className="h-4 w-4" />
             </Link>
           </Button>
