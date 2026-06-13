@@ -41,6 +41,7 @@ import {
   type Agency,
   type EmailContent,
 } from "@/lib/agency-saas";
+import { isValidEmail } from "@/lib/email-utils";
 
 export const Route = createFileRoute("/admin/agencies/$slug")({
   head: () => ({
@@ -95,6 +96,11 @@ function AdminAgencyRoute() {
   function onSave(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!agency) return;
+    if (!isValidEmail(form.estimationEmail)) {
+      setFeedback("Email invalide.");
+      return;
+    }
+
     const updated = updateAgency(agency.id, form);
     setAgency(updated);
     setFeedback("Informations enregistrées.");
@@ -112,6 +118,13 @@ function AdminAgencyRoute() {
       setFeedback(
         "Renseignez l’email de réception des estimations avant d’activer.",
       );
+      return;
+    }
+    if (
+      !isValidEmail(agency.estimationEmail) ||
+      managers.some((manager) => !isValidEmail(manager.email))
+    ) {
+      setFeedback("Email invalide.");
       return;
     }
 
@@ -368,9 +381,14 @@ function AdminAgencyRoute() {
                 <Input
                   type="email"
                   value={form.estimationEmail}
-                  onChange={(event) =>
-                    setForm({ ...form, estimationEmail: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setForm({ ...form, estimationEmail: event.target.value });
+                    if (feedback === "Email invalide.") setFeedback("");
+                  }}
+                  onInvalid={(event) => {
+                    event.preventDefault();
+                    setFeedback("Email invalide.");
+                  }}
                   required
                 />
               </Field>

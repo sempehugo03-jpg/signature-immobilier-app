@@ -1,4 +1,5 @@
 import { agencyConfig } from "@/lib/agency-config";
+import { isValidEmail } from "@/lib/email-utils";
 
 export type AgencyStatus = "demo" | "active" | "disabled";
 export type AgencyPlan = "demo" | "pilot";
@@ -784,7 +785,7 @@ export function buildEmailContent({
   subject: string;
   body: string;
 }): EmailContent {
-  const recipients = to.map(cleanEmail).filter(Boolean);
+  const recipients = to.map(cleanEmail).filter(isValidEmail);
   const recipientValue = recipients.join(",");
   const encodedSubject = encodeURIComponent(subject);
   const encodedBody = encodeURIComponent(body);

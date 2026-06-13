@@ -48,6 +48,7 @@ import {
   removeAgency,
   type Agency,
 } from "@/lib/agency-saas";
+import { isValidEmail } from "@/lib/email-utils";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -211,6 +212,15 @@ function AdminDashboard() {
 
   function onCreateAgency(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (
+      !isValidEmail(form.estimationEmail) ||
+      !isValidEmail(form.managerEmail)
+    ) {
+      setManualAccessLink("");
+      setFeedback("Email invalide.");
+      return;
+    }
+
     const agency = createAgency({
       name: form.name,
       city: form.city,
@@ -245,6 +255,13 @@ function AdminDashboard() {
       setFeedback(
         "Renseignez l’email de réception des estimations avant d’activer.",
       );
+      return;
+    }
+    if (
+      !isValidEmail(agency.estimationEmail) ||
+      managers.some((manager) => !isValidEmail(manager.email))
+    ) {
+      setFeedback("Email invalide.");
       return;
     }
 
@@ -373,9 +390,15 @@ function AdminDashboard() {
                 <Input
                   type="email"
                   value={form.estimationEmail}
-                  onChange={(event) =>
-                    setForm({ ...form, estimationEmail: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setForm({ ...form, estimationEmail: event.target.value });
+                    if (feedback === "Email invalide.") setFeedback("");
+                  }}
+                  onInvalid={(event) => {
+                    event.preventDefault();
+                    setManualAccessLink("");
+                    setFeedback("Email invalide.");
+                  }}
                   required
                 />
               </Field>
@@ -404,9 +427,15 @@ function AdminDashboard() {
                 <Input
                   type="email"
                   value={form.managerEmail}
-                  onChange={(event) =>
-                    setForm({ ...form, managerEmail: event.target.value })
-                  }
+                  onChange={(event) => {
+                    setForm({ ...form, managerEmail: event.target.value });
+                    if (feedback === "Email invalide.") setFeedback("");
+                  }}
+                  onInvalid={(event) => {
+                    event.preventDefault();
+                    setManualAccessLink("");
+                    setFeedback("Email invalide.");
+                  }}
                   required
                 />
               </Field>
