@@ -396,6 +396,10 @@ function CreatePropertyForm({
       description: form.description,
       image: agencyConfig.properties[0].coverImage,
       sellerToken: "",
+      sellerFirstName: "",
+      sellerLastName: "",
+      sellerEmail: "",
+      sellerPhone: "",
       documents: ["Mandat", "Diagnostics"],
     });
     onCreated(nextProperties);

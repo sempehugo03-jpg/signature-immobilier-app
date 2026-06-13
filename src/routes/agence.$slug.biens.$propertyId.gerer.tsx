@@ -24,8 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { agencyConfig } from "@/lib/agency-config";
+import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
-  createSellerAccessForProperty,
+  createSellerInviteForProperty,
   getAgencyBySlug,
   getAgencyProperty,
   getSellerAccessLink,
@@ -33,6 +34,7 @@ import {
   type Agency,
   type AgencyProperty,
 } from "@/lib/agency-saas";
+import { isValidEmail } from "@/lib/email-utils";
 
 export const Route = createFileRoute(
   "/agence/$slug/biens/$propertyId/gerer",
@@ -48,13 +50,32 @@ function AgencyPropertyDetailRoute() {
   const [agency, setAgency] = useState<Agency | null>(null);
   const [property, setProperty] = useState<AgencyProperty | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [manualSellerInviteLink, setManualSellerInviteLink] = useState("");
+  const [sellerError, setSellerError] = useState("");
+  const [sellerForm, setSellerForm] = useState({
+    firstName: "",
+    lastName: "",
+    email: "",
+    phone: "",
+  });
   const [newDocument, setNewDocument] = useState("");
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const nextAgency = getAgencyBySlug(slug);
     setAgency(nextAgency);
-    if (nextAgency) setProperty(getAgencyProperty(nextAgency, propertyId));
+    if (nextAgency) {
+      const nextProperty = getAgencyProperty(nextAgency, propertyId);
+      setProperty(nextProperty);
+      if (nextProperty) {
+        setSellerForm({
+          firstName: nextProperty.sellerFirstName,
+          lastName: nextProperty.sellerLastName,
+          email: nextProperty.sellerEmail,
+          phone: nextProperty.sellerPhone,
+        });
+      }
+    }
     setLoaded(true);
   }, [slug, propertyId]);
 
@@ -110,11 +131,43 @@ function AgencyPropertyDetailRoute() {
     setFeedback("Document ajouté.");
   }
 
-  function onCreateSellerSpace() {
-    if (!property) return;
-    const nextProperty = createSellerAccessForProperty(property);
-    setProperty(nextProperty);
-    setFeedback("Espace vendeur créé.");
+  async function onCreateSellerSpace(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
+    if (!agency || !property) return;
+    if (!isValidEmail(sellerForm.email)) {
+      setSellerError("Email invalide.");
+      return;
+    }
+
+    const result = createSellerInviteForProperty(agency, property, sellerForm);
+    setProperty(result.property);
+    setSellerError("");
+
+    try {
+      const sent = await sendInviteEmail({
+        data: {
+          inviteType: "seller_invite",
+          agencyName: agency.name,
+          recipientEmail: sellerForm.email,
+          recipientFirstName: sellerForm.firstName,
+          accessUrl: result.email.accessUrl ?? "",
+          propertyTitle: property.title,
+        },
+      });
+
+      if (sent.sent) {
+        setManualSellerInviteLink("");
+        setFeedback("Espace vendeur créé. Email d’invitation envoyé.");
+        return;
+      }
+    } catch (error) {
+      console.info("Invitation vendeur non envoyée", error);
+    }
+
+    setManualSellerInviteLink(result.email.accessUrl ?? "");
+    setFeedback(
+      "Invitation vendeur créée. Email non envoyé : configuration email manquante.",
+    );
   }
 
   async function onCopySellerLink() {
@@ -150,6 +203,11 @@ function AgencyPropertyDetailRoute() {
         {feedback && (
           <div className="mb-7 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             {feedback}
+            {manualSellerInviteLink && (
+              <div className="mt-2 break-all font-medium">
+                Lien d’invitation vendeur à copier : {manualSellerInviteLink}
+              </div>
+            )}
           </div>
         )}
 
@@ -353,12 +411,90 @@ function AgencyPropertyDetailRoute() {
 
         <div className="mt-7 grid gap-7 lg:grid-cols-2">
           <SaasCard className="p-6 md:p-8">
-            <SectionTitle title="Vendeur" />
-            <div className="mt-5 grid gap-3 text-sm">
-              <Info label="Nom du vendeur" value="Vendeur à renseigner" />
-              <Info label="Email" value="Email vendeur à renseigner" />
-              <Info label="Téléphone" value="Téléphone vendeur à renseigner" />
-            </div>
+            <SectionTitle
+              title="Vendeur"
+              description="Ces informations servent à envoyer l’invitation de création d’accès vendeur."
+            />
+            <form
+              className="mt-5 grid gap-4 sm:grid-cols-2"
+              onSubmit={onCreateSellerSpace}
+            >
+              <Field label="Prénom">
+                <Input
+                  value={sellerForm.firstName}
+                  onChange={(event) =>
+                    setSellerForm({
+                      ...sellerForm,
+                      firstName: event.target.value,
+                    })
+                  }
+                  disabled={agency.status !== "active"}
+                  required
+                />
+              </Field>
+              <Field label="Nom">
+                <Input
+                  value={sellerForm.lastName}
+                  onChange={(event) =>
+                    setSellerForm({
+                      ...sellerForm,
+                      lastName: event.target.value,
+                    })
+                  }
+                  disabled={agency.status !== "active"}
+                  required
+                />
+              </Field>
+              <Field label="Email" className="sm:col-span-2">
+                <Input
+                  type="email"
+                  value={sellerForm.email}
+                  onChange={(event) => {
+                    setSellerForm({
+                      ...sellerForm,
+                      email: event.target.value,
+                    });
+                    setSellerError("");
+                  }}
+                  onInvalid={(event) => {
+                    event.preventDefault();
+                    setSellerError("Email invalide.");
+                  }}
+                  disabled={agency.status !== "active"}
+                  required
+                />
+              </Field>
+              {sellerError && (
+                <p className="sm:col-span-2 text-sm text-red-600">
+                  {sellerError}
+                </p>
+              )}
+              <Field label="Téléphone optionnel" className="sm:col-span-2">
+                <Input
+                  type="tel"
+                  value={sellerForm.phone}
+                  onChange={(event) =>
+                    setSellerForm({
+                      ...sellerForm,
+                      phone: event.target.value,
+                    })
+                  }
+                  disabled={agency.status !== "active"}
+                />
+              </Field>
+              <div className="sm:col-span-2">
+                <Button
+                  className="rounded-full"
+                  size="lg"
+                  disabled={agency.status !== "active"}
+                >
+                  <Mail className="h-4 w-4" />
+                  {property.sellerToken
+                    ? "Renvoyer l’invitation vendeur"
+                    : "Créer l’espace vendeur"}
+                </Button>
+              </div>
+            </form>
           </SaasCard>
 
           <SaasCard className="p-6 md:p-8">
@@ -406,15 +542,15 @@ function AgencyPropertyDetailRoute() {
                 {getSellerAccessLink(property)}
               </div>
               <div className="mt-5 flex flex-wrap gap-2">
-                <Button asChild variant="outline" className="rounded-full bg-white">
-                  <a
-                    href={`mailto:?subject=${encodeURIComponent(
-                      `Votre espace vendeur ${agency.name}`,
-                    )}&body=${encodeURIComponent(getSellerAccessLink(property))}`}
-                  >
-                    <Mail className="h-4 w-4" />
-                    Renvoyer l’accès vendeur
-                  </a>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  disabled={agency.status !== "active"}
+                  onClick={() => void onCreateSellerSpace()}
+                >
+                  <Mail className="h-4 w-4" />
+                  Renvoyer l’invitation vendeur
                 </Button>
                 <Button
                   type="button"
@@ -435,7 +571,7 @@ function AgencyPropertyDetailRoute() {
                 type="button"
                 className="mt-5 rounded-full"
                 disabled={agency.status !== "active"}
-                onClick={onCreateSellerSpace}
+                onClick={() => void onCreateSellerSpace()}
               >
                 <Link2 className="h-4 w-4" />
                 Créer l’espace vendeur
