@@ -24,14 +24,13 @@ import {
 } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
+import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import { clearAdminSession } from "@/lib/admin-session";
 import {
   activateAgency,
-  buildManagerActivationEmail,
+  createTeamMemberInviteEmail,
   disableAgency,
   getAbsoluteAgencyLinks,
-  getActiveManagers,
   getAgents,
   getAgencyLinks,
   getAgencyBySlug,
@@ -40,6 +39,7 @@ import {
   updateAgency,
   type Agency,
   type EmailContent,
+  type TeamMember,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
 
@@ -109,7 +109,9 @@ function AdminAgencyRoute() {
   async function onActivate() {
     if (!agency) return;
     setEmailPreviews([]);
-    const managers = getActiveManagers(agency.id);
+    const managers = getManagers(agency.id).filter(
+      (manager) => manager.status !== "disabled",
+    );
     if (!managers.length) {
       setFeedback("Ajoutez au moins un patron avant d’activer l’agence.");
       return;
@@ -132,26 +134,15 @@ function AdminAgencyRoute() {
     if (!updated) return;
 
     const emails = managers.map((manager) =>
-      buildManagerActivationEmail(updated, manager),
+      createTeamMemberInviteEmail(updated, manager),
     );
     setAgency(updated);
     setEmailPreviews(emails);
 
     const results = await Promise.all(
-      emails.map(async (email) => {
-        try {
-          return await sendManagerAccessEmail({
-            data: {
-              to: email.to,
-              subject: email.subject,
-              body: email.body,
-            },
-          });
-        } catch (error) {
-          console.info("Email non envoyé : RESEND_API_KEY manquante", error);
-          return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
-        }
-      }),
+      managers.map((manager, index) =>
+        sendTeamInviteEmail(updated.name, manager, emails[index]?.accessUrl),
+      ),
     );
 
     const sentCount = results.filter((result) => result.sent).length;
@@ -487,6 +478,28 @@ function AdminAgencyRoute() {
       </section>
     </SaasShell>
   );
+}
+
+async function sendTeamInviteEmail(
+  agencyName: string,
+  member: TeamMember,
+  accessUrl = "",
+) {
+  try {
+    return await sendInviteEmail({
+      data: {
+        inviteType:
+          member.role === "manager" ? "manager_invite" : "agent_invite",
+        agencyName,
+        recipientEmail: member.email,
+        recipientFirstName: member.firstName,
+        accessUrl,
+      },
+    });
+  } catch (error) {
+    console.info("Invitation non envoyée", error);
+    return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
+  }
 }
 
 function CopyRow({

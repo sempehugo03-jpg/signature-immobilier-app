@@ -1,20 +1,33 @@
-import { RotateCcw, Trash2, UserRoundPlus, UserX } from "lucide-react";
+import { Mail, RotateCcw, Trash2, UserRoundPlus, UserX } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { Field, SectionTitle, StatusBadge } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
   addTeamMember,
+  createTeamMemberInviteEmail,
   deleteTeamMember,
   disableTeamMember,
   enableTeamMember,
   getAgents,
+  getAgencyById,
   getManagers,
   type TeamMember,
   type TeamRole,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+
+type MemberFormData = Pick<
+  TeamMember,
+  "firstName" | "lastName" | "email" | "phone"
+>;
+
+type SendInviteResult = {
+  sent: boolean;
+  reason?: string | null;
+};
 
 export function AgencyTeamManager({
   agencyId,
@@ -30,6 +43,7 @@ export function AgencyTeamManager({
   const [managers, setManagers] = useState<TeamMember[]>([]);
   const [agents, setAgents] = useState<TeamMember[]>([]);
   const [feedback, setFeedback] = useState("");
+  const [manualInviteLink, setManualInviteLink] = useState("");
 
   useEffect(() => {
     refresh();
@@ -41,13 +55,49 @@ export function AgencyTeamManager({
     onChange?.();
   }
 
-  function onAdd(
-    role: TeamRole,
-    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
-  ) {
-    addTeamMember(agencyId, { ...data, role, status: "active" });
-    setFeedback(role === "manager" ? "Patron ajouté." : "Agent ajouté.");
+  async function onAdd(role: TeamRole, data: MemberFormData) {
+    const member = addTeamMember(agencyId, {
+      ...data,
+      role,
+      status: "invited",
+    });
+    await sendInvitation(
+      member,
+      role === "manager" ? "Patron ajouté" : "Agent ajouté",
+    );
     refresh();
+  }
+
+  async function onResend(member: TeamMember) {
+    await sendInvitation(member, "Invitation renvoyée");
+    refresh();
+  }
+
+  async function sendInvitation(member: TeamMember, successPrefix: string) {
+    const agency = getAgencyById(agencyId);
+    if (!agency) {
+      setManualInviteLink("");
+      setFeedback("Agence introuvable.");
+      return;
+    }
+
+    const email = createTeamMemberInviteEmail(agency, member);
+    const result = await deliverInviteEmail({
+      accessUrl: email.accessUrl ?? "",
+      agencyName: agency.name,
+      member,
+    });
+
+    if (result.sent) {
+      setManualInviteLink("");
+      setFeedback(`${successPrefix}. Email d’invitation envoyé.`);
+      return;
+    }
+
+    setManualInviteLink(email.accessUrl ?? "");
+    setFeedback(
+      `${successPrefix}. Invitation créée. Email non envoyé : configuration email manquante.`,
+    );
   }
 
   function onDelete(member: TeamMember) {
@@ -57,12 +107,14 @@ export function AgencyTeamManager({
       : "Supprimer cet agent ?";
     if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
+    setManualInviteLink("");
     setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
     refresh();
   }
 
   function onDisable(member: TeamMember) {
     disableTeamMember(member.id);
+    setManualInviteLink("");
     setFeedback(
       member.role === "manager" ? "Patron désactivé." : "Agent désactivé.",
     );
@@ -71,6 +123,7 @@ export function AgencyTeamManager({
 
   function onEnable(member: TeamMember) {
     enableTeamMember(member.id);
+    setManualInviteLink("");
     setFeedback(
       member.role === "manager" ? "Patron réactivé." : "Agent réactivé.",
     );
@@ -83,6 +136,11 @@ export function AgencyTeamManager({
       {feedback && (
         <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
           {feedback}
+          {manualInviteLink && (
+            <div className="mt-2 break-all font-medium">
+              Lien d’invitation à copier : {manualInviteLink}
+            </div>
+          )}
         </div>
       )}
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
@@ -95,6 +153,7 @@ export function AgencyTeamManager({
           onDelete={onDelete}
           onDisable={onDisable}
           onEnable={onEnable}
+          onResend={onResend}
         />
         <TeamColumn
           title="Agents"
@@ -105,10 +164,37 @@ export function AgencyTeamManager({
           onDelete={onDelete}
           onDisable={onDisable}
           onEnable={onEnable}
+          onResend={onResend}
         />
       </div>
     </div>
   );
+}
+
+async function deliverInviteEmail({
+  accessUrl,
+  agencyName,
+  member,
+}: {
+  accessUrl: string;
+  agencyName: string;
+  member: TeamMember;
+}): Promise<SendInviteResult> {
+  try {
+    return await sendInviteEmail({
+      data: {
+        inviteType:
+          member.role === "manager" ? "manager_invite" : "agent_invite",
+        agencyName,
+        recipientEmail: member.email,
+        recipientFirstName: member.firstName,
+        accessUrl,
+      },
+    });
+  } catch (error) {
+    console.info("Invitation non envoyée", error);
+    return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
+  }
 }
 
 function TeamColumn({
@@ -120,18 +206,17 @@ function TeamColumn({
   onDelete,
   onDisable,
   onEnable,
+  onResend,
 }: {
   title: string;
   empty: string;
   members: TeamMember[];
   role: TeamRole;
-  onAdd: (
-    role: TeamRole,
-    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
-  ) => void;
+  onAdd: (role: TeamRole, data: MemberFormData) => Promise<void>;
   onDelete: (member: TeamMember) => void;
   onDisable: (member: TeamMember) => void;
   onEnable: (member: TeamMember) => void;
+  onResend: (member: TeamMember) => void;
 }) {
   const noun = role === "manager" ? "patron" : "agent";
 
@@ -169,22 +254,10 @@ function TeamColumn({
                   </div>
                 )}
               </div>
-              <StatusBadge
-                status={member.status === "active" ? "actif" : "désactivé"}
-              />
+              <StatusBadge status={getMemberStatusLabel(member.status)} />
             </div>
             <div className="mt-4 flex flex-wrap gap-2">
-              {member.status === "active" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-full bg-white"
-                  onClick={() => onDisable(member)}
-                >
-                  <UserX className="h-4 w-4" />
-                  Désactiver
-                </Button>
-              ) : (
+              {member.status === "disabled" ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -194,7 +267,27 @@ function TeamColumn({
                   <RotateCcw className="h-4 w-4" />
                   Réactiver
                 </Button>
+              ) : (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={() => onDisable(member)}
+                >
+                  <UserX className="h-4 w-4" />
+                  Désactiver
+                </Button>
               )}
+              <Button
+                type="button"
+                variant="outline"
+                className="rounded-full bg-white"
+                disabled={member.status === "disabled"}
+                onClick={() => onResend(member)}
+              >
+                <Mail className="h-4 w-4" />
+                Renvoyer l’invitation
+              </Button>
               <Button
                 type="button"
                 variant="outline"
@@ -217,10 +310,7 @@ function AddMemberForm({
   onAdd,
 }: {
   role: TeamRole;
-  onAdd: (
-    role: TeamRole,
-    data: Pick<TeamMember, "firstName" | "lastName" | "email" | "phone">,
-  ) => void;
+  onAdd: (role: TeamRole, data: MemberFormData) => Promise<void>;
 }) {
   const [form, setForm] = useState({
     firstName: "",
@@ -229,15 +319,18 @@ function AddMemberForm({
     phone: "",
   });
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isValidEmail(form.email)) {
       setError("Email invalide.");
       return;
     }
 
-    onAdd(role, form);
+    setSubmitting(true);
+    await onAdd(role, form);
+    setSubmitting(false);
     setForm({ firstName: "", lastName: "", email: "", phone: "" });
     setError("");
   }
@@ -286,10 +379,18 @@ function AddMemberForm({
         />
       </Field>
       <div className="sm:col-span-2">
-        <Button className="w-full rounded-full" size="lg">
-          Ajouter {role === "manager" ? "un patron" : "un agent"}
+        <Button className="w-full rounded-full" size="lg" disabled={submitting}>
+          {submitting
+            ? "Préparation..."
+            : `Ajouter ${role === "manager" ? "un patron" : "un agent"}`}
         </Button>
       </div>
     </form>
   );
+}
+
+function getMemberStatusLabel(status: TeamMember["status"]) {
+  if (status === "active") return "actif";
+  if (status === "invited") return "invité";
+  return "désactivé";
 }

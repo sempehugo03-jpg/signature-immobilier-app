@@ -1,11 +1,21 @@
 import { agencyConfig } from "@/lib/agency-config";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  buildInviteEmailBody,
+  getInviteEmailSubject,
+  isInviteAccessType,
+  type InviteAccessType,
+} from "@/lib/invite-email";
 
 export type AgencyStatus = "demo" | "active" | "disabled";
 export type AgencyPlan = "demo" | "pilot";
 export type TeamRole = "manager" | "agent";
-export type TeamMemberStatus = "active" | "disabled";
-export type AccessTokenType = "manager" | "agent" | "seller";
+export type TeamMemberStatus = "invited" | "active" | "disabled";
+export type AccessTokenType =
+  | "manager"
+  | "agent"
+  | "seller"
+  | InviteAccessType;
 export type AgencyLeadStatus = "Nouveau" | "Rappelé" | "Converti" | "Perdu";
 
 export type AgencyFeatures = {
@@ -57,7 +67,13 @@ export type AccessToken = {
   agencyId: string;
   propertyId?: string;
   teamMemberId?: string;
+  sellerId?: string;
+  sellerToken?: string;
+  email?: string;
   createdAt: string;
+  usedAt?: string;
+  expiresAt?: string;
+  passwordHash?: string;
 };
 
 export type AgencyProperty = {
@@ -84,8 +100,37 @@ export type AgencyProperty = {
   description: string;
   image: string;
   sellerToken: string;
+  sellerFirstName: string;
+  sellerLastName: string;
+  sellerEmail: string;
+  sellerPhone: string;
   documents: string[];
 };
+
+export type SellerInviteInput = {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+};
+
+export type InviteAccessLookup =
+  | {
+      status: "valid";
+      access: AccessToken;
+      agency: Agency;
+      member?: TeamMember | null;
+      property?: AgencyProperty | null;
+    }
+  | {
+      status: "invalid" | "used" | "expired" | "disabled";
+      title: string;
+      message: string;
+      access?: AccessToken | null;
+      agency?: Agency | null;
+      member?: TeamMember | null;
+      property?: AgencyProperty | null;
+    };
 
 export type AgencyLead = {
   id: string;
@@ -501,23 +546,73 @@ export function saveAgencyProperty(property: AgencyProperty) {
 }
 
 export function createSellerAccessForProperty(property: AgencyProperty) {
-  const access = createAccessToken({
-    type: "seller",
-    agencyId: property.agencyId,
-    propertyId: property.id,
-  });
+  const sellerToken = property.sellerToken || generateAccessTokenValue();
   const updated = saveAgencyProperty({
     ...property,
-    sellerToken: access.token,
+    sellerToken,
   }).find((item) => item.id === property.id);
-  return updated ?? { ...property, sellerToken: access.token };
+  return updated ?? { ...property, sellerToken };
 }
 
 export function getSellerAccessLink(property: AgencyProperty) {
   if (!property.sellerToken) return "";
-  return `${getPublicAppUrl()}/vendeur?token=${encodeURIComponent(
-    property.sellerToken,
-  )}`;
+  const agency = getAgencyById(property.agencyId);
+  if (!agency) return "";
+  return getAgencySellerAccessUrl(agency, property.sellerToken);
+}
+
+export function getAgencySellerAccessUrl(agency: Agency, sellerToken: string) {
+  return `${getPublicAppUrl()}/agence/${encodeURIComponent(
+    agency.slug,
+  )}/vendeur/${encodeURIComponent(sellerToken)}`;
+}
+
+export function findAgencyPropertyBySellerToken(
+  agency: Agency,
+  sellerToken: string,
+) {
+  return (
+    getAgencyProperties(agency).find(
+      (property) => property.sellerToken === sellerToken,
+    ) ?? null
+  );
+}
+
+export function createSellerInviteForProperty(
+  agency: Agency,
+  property: AgencyProperty,
+  seller: SellerInviteInput,
+) {
+  const sellerToken = property.sellerToken || generateAccessTokenValue();
+  const updatedProperty =
+    saveAgencyProperty({
+      ...property,
+      sellerToken,
+      sellerFirstName: seller.firstName.trim(),
+      sellerLastName: seller.lastName.trim(),
+      sellerEmail: cleanEmail(seller.email),
+      sellerPhone: seller.phone.trim(),
+    }).find((item) => item.id === property.id) ?? {
+      ...property,
+      sellerToken,
+      sellerFirstName: seller.firstName.trim(),
+      sellerLastName: seller.lastName.trim(),
+      sellerEmail: cleanEmail(seller.email),
+      sellerPhone: seller.phone.trim(),
+    };
+  const access = createInviteAccessToken({
+    type: "seller_invite",
+    agencyId: agency.id,
+    propertyId: updatedProperty.id,
+    sellerToken,
+    email: seller.email,
+  });
+
+  return {
+    property: updatedProperty,
+    access,
+    email: buildSellerInviteEmail(agency, updatedProperty, seller, access),
+  };
 }
 
 export function getAgencyLeads(slug: string) {
@@ -555,7 +650,12 @@ export function updateAgencyLeadStatus(id: string, status: AgencyLeadStatus) {
 
 export function createAccessToken(
   data: Pick<AccessToken, "type" | "agencyId"> &
-    Partial<Pick<AccessToken, "propertyId" | "teamMemberId">>,
+    Partial<
+      Pick<
+        AccessToken,
+        "propertyId" | "teamMemberId" | "sellerId" | "sellerToken" | "email"
+      >
+    >,
 ) {
   const createdAt = new Date().toISOString();
   const access: AccessToken = {
@@ -572,6 +672,9 @@ export function createAccessToken(
     agencyId: data.agencyId,
     propertyId: data.propertyId,
     teamMemberId: data.teamMemberId,
+    sellerId: data.sellerId,
+    sellerToken: data.sellerToken,
+    email: data.email ? cleanEmail(data.email) : undefined,
     createdAt,
   };
   const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
@@ -586,6 +689,57 @@ export function createAccessToken(
           token.agencyId === access.agencyId &&
           token.propertyId === access.propertyId &&
           token.teamMemberId === access.teamMemberId
+        ),
+    ),
+  ]);
+  return access;
+}
+
+export function createInviteAccessToken(
+  data: Pick<AccessToken, "agencyId" | "type" | "email"> &
+    Partial<
+      Pick<
+        AccessToken,
+        | "propertyId"
+        | "teamMemberId"
+        | "sellerId"
+        | "sellerToken"
+        | "expiresAt"
+      >
+    >,
+) {
+  if (!isInviteAccessType(data.type)) {
+    throw new Error("Invalid invite access type");
+  }
+
+  const createdAt = new Date().toISOString();
+  const access: AccessToken = {
+    id: `access-${Date.now()}-${randomId()}`,
+    token: generateAccessTokenValue(),
+    type: data.type,
+    agencyId: data.agencyId,
+    propertyId: data.propertyId,
+    teamMemberId: data.teamMemberId,
+    sellerId: data.sellerId,
+    sellerToken: data.sellerToken,
+    email: cleanEmail(data.email ?? ""),
+    createdAt,
+    expiresAt: data.expiresAt,
+  };
+  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
+    coerceAccessToken,
+  );
+  writeStored(TOKENS_KEY, [
+    access,
+    ...tokens.filter(
+      (token) =>
+        !(
+          token.type === access.type &&
+          token.agencyId === access.agencyId &&
+          token.propertyId === access.propertyId &&
+          token.teamMemberId === access.teamMemberId &&
+          token.sellerId === access.sellerId &&
+          !token.usedAt
         ),
     ),
   ]);
@@ -617,6 +771,134 @@ export function verifyAgencyAccessToken(tokenValue: string) {
   return { access, agency, member };
 }
 
+export function getInviteAccessUrl(access: AccessToken) {
+  return `${getPublicAppUrl()}/creer-acces/${encodeURIComponent(
+    access.token,
+  )}`;
+}
+
+export function createTeamMemberInviteEmail(
+  agency: Agency,
+  member: TeamMember,
+) {
+  const access = createInviteAccessToken({
+    type: member.role === "manager" ? "manager_invite" : "agent_invite",
+    agencyId: agency.id,
+    teamMemberId: member.id,
+    email: member.email,
+  });
+
+  return member.role === "manager"
+    ? buildManagerInviteEmail(agency, member, access)
+    : buildAgentInviteEmail(agency, member, access);
+}
+
+export function getInviteAccessByToken(tokenValue: string): InviteAccessLookup {
+  const access = getAccessToken(tokenValue);
+  if (!access || !isInviteAccessType(access.type)) {
+    return invalidInviteResult();
+  }
+
+  if (access.usedAt) {
+    return invalidInviteResult("used", access);
+  }
+
+  if (access.expiresAt && new Date(access.expiresAt).getTime() < Date.now()) {
+    return invalidInviteResult("expired", access);
+  }
+
+  const agency = getAgencyById(access.agencyId);
+  if (!agency) return invalidInviteResult("invalid", access);
+
+  if (agency.status === "disabled") {
+    return {
+      status: "disabled",
+      title: "Ce portail est actuellement désactivé.",
+      message: "Contactez Signature Immobilier pour réactiver votre accès.",
+      access,
+      agency,
+    };
+  }
+
+  if (access.type === "manager_invite" || access.type === "agent_invite") {
+    const member = access.teamMemberId
+      ? getTeamMembers(agency.id).find(
+          (item) => item.id === access.teamMemberId,
+        )
+      : null;
+
+    if (!member) return invalidInviteResult("invalid", access, agency);
+    if (member.status === "disabled") {
+      return {
+        status: "disabled",
+        title: "Votre accès est désactivé.",
+        message: "Contactez votre agence pour réactiver votre accès.",
+        access,
+        agency,
+        member,
+      };
+    }
+
+    return { status: "valid", access, agency, member };
+  }
+
+  const property = access.propertyId
+    ? getAgencyProperty(agency, access.propertyId)
+    : access.sellerToken
+      ? findAgencyPropertyBySellerToken(agency, access.sellerToken)
+      : null;
+
+  if (!property) return invalidInviteResult("invalid", access, agency);
+
+  return { status: "valid", access, agency, property };
+}
+
+export function activateInviteAccess(tokenValue: string, password: string) {
+  const lookup = getInviteAccessByToken(tokenValue);
+  if (lookup.status !== "valid") return lookup;
+
+  const now = new Date().toISOString();
+  const activatedAccess = updateStoredAccessToken(lookup.access.id, {
+    usedAt: now,
+    passwordHash: createPilotPasswordMarker(password),
+  });
+  const access = activatedAccess ?? { ...lookup.access, usedAt: now };
+
+  if (
+    (access.type === "manager_invite" || access.type === "agent_invite") &&
+    lookup.member
+  ) {
+    updateTeamMember(lookup.member.id, { status: "active" });
+    saveAgencyAccessSession({
+      ...access,
+      type: access.type === "manager_invite" ? "manager" : "agent",
+    });
+  }
+
+  if (access.type === "seller_invite") {
+    saveAgencyAccessSession({ ...access, type: "seller" });
+  }
+
+  return {
+    ...lookup,
+    access,
+    redirectPath: getInviteRedirectPath(access, lookup.agency, lookup.property),
+  };
+}
+
+export function getInviteRedirectPath(
+  access: AccessToken,
+  agency: Agency,
+  property?: AgencyProperty | null,
+) {
+  if (access.type === "seller_invite") {
+    const sellerToken = access.sellerToken || property?.sellerToken || "";
+    return `/agence/${agency.slug}/vendeur/${sellerToken}`;
+  }
+
+  return `/agence/${agency.slug}`;
+}
+
 export function saveAgencyAccessSession(access: AccessToken) {
   if (typeof window === "undefined") return;
   const value = JSON.stringify(access);
@@ -632,6 +914,14 @@ export function getCurrentAgencyAccess(agencyId?: string) {
   const access = coerceAccessToken(rawAccess);
   if (!access.token || !access.agencyId) return null;
   if (agencyId && access.agencyId !== agencyId) return null;
+  const agency = getAgencyById(access.agencyId);
+  if (!agency || agency.status === "disabled") return null;
+  if (access.teamMemberId && (access.type === "manager" || access.type === "agent")) {
+    const member = getTeamMembers(access.agencyId).find(
+      (item) => item.id === access.teamMemberId,
+    );
+    if (!member || member.status !== "active") return null;
+  }
   return access;
 }
 
@@ -664,6 +954,10 @@ export function createDemoProperties(agency: Agency): AgencyProperty[] {
         "Une annonce premium pensée pour valoriser le bien et rendre le suivi vendeur plus clair.",
       image: images[0].coverImage,
       sellerToken: `${agency.slug}-seller-demo-1`,
+      sellerFirstName: "Claire",
+      sellerLastName: "Martin",
+      sellerEmail: "claire.martin@example.com",
+      sellerPhone: "06 00 00 00 00",
       documents: ["Mandat", "Diagnostics", "Offre", "Compromis"],
     },
     {
@@ -686,6 +980,10 @@ export function createDemoProperties(agency: Agency): AgencyProperty[] {
         "Un exemple de bien pour montrer la qualité de présentation disponible après activation.",
       image: images[1]?.coverImage ?? images[0].coverImage,
       sellerToken: `${agency.slug}-seller-demo-2`,
+      sellerFirstName: "Julien",
+      sellerLastName: "Durand",
+      sellerEmail: "julien.durand@example.com",
+      sellerPhone: "06 00 00 00 00",
       documents: ["Mandat", "Diagnostics"],
     },
   ];
@@ -693,6 +991,66 @@ export function createDemoProperties(agency: Agency): AgencyProperty[] {
 
 export function getSellerDemoProperty(agency: Agency) {
   return createDemoProperties(agency)[0];
+}
+
+export function buildManagerInviteEmail(
+  agency: Agency,
+  manager: TeamMember,
+  access = createInviteAccessToken({
+    type: "manager_invite",
+    agencyId: agency.id,
+    teamMemberId: manager.id,
+    email: manager.email,
+  }),
+): EmailContent {
+  return buildInviteEmail({
+    inviteType: "manager_invite",
+    agency,
+    firstName: manager.firstName,
+    email: manager.email,
+    access,
+  });
+}
+
+export function buildAgentInviteEmail(
+  agency: Agency,
+  agent: TeamMember,
+  access = createInviteAccessToken({
+    type: "agent_invite",
+    agencyId: agency.id,
+    teamMemberId: agent.id,
+    email: agent.email,
+  }),
+): EmailContent {
+  return buildInviteEmail({
+    inviteType: "agent_invite",
+    agency,
+    firstName: agent.firstName,
+    email: agent.email,
+    access,
+  });
+}
+
+export function buildSellerInviteEmail(
+  agency: Agency,
+  property: AgencyProperty,
+  seller: SellerInviteInput,
+  access = createInviteAccessToken({
+    type: "seller_invite",
+    agencyId: agency.id,
+    propertyId: property.id,
+    sellerToken: property.sellerToken,
+    email: seller.email,
+  }),
+): EmailContent {
+  return buildInviteEmail({
+    inviteType: "seller_invite",
+    agency,
+    firstName: seller.firstName,
+    email: seller.email,
+    access,
+    propertyTitle: property.title,
+  });
 }
 
 export function buildManagerActivationEmail(
@@ -798,6 +1156,40 @@ export function buildEmailContent({
   };
 }
 
+function buildInviteEmail({
+  inviteType,
+  agency,
+  firstName,
+  email,
+  access,
+  propertyTitle,
+}: {
+  inviteType: InviteAccessType;
+  agency: Agency;
+  firstName: string;
+  email: string;
+  access: AccessToken;
+  propertyTitle?: string;
+}) {
+  const accessUrl = getInviteAccessUrl(access);
+  const body = buildInviteEmailBody({
+    inviteType,
+    agencyName: agency.name,
+    recipientFirstName: firstName,
+    accessUrl,
+    propertyTitle,
+  });
+
+  return {
+    ...buildEmailContent({
+      to: [email],
+      subject: getInviteEmailSubject(inviteType),
+      body,
+    }),
+    accessUrl,
+  };
+}
+
 function mergeAgencies(stored: unknown[]) {
   const removedIds = new Set(
     safeStringArray(readStored<unknown[]>(REMOVED_AGENCIES_KEY, [])),
@@ -896,6 +1288,10 @@ function coerceProperty(property: unknown): AgencyProperty {
     description: safeString(source.description),
     image: safeString(source.image, fallbackImage),
     sellerToken: safeString(source.sellerToken),
+    sellerFirstName: safeString(source.sellerFirstName),
+    sellerLastName: safeString(source.sellerLastName),
+    sellerEmail: cleanEmail(safeString(source.sellerEmail)),
+    sellerPhone: safeString(source.sellerPhone).trim(),
     documents: safeStringArray(source.documents),
   };
 }
@@ -940,7 +1336,13 @@ function coerceAccessToken(access: unknown): AccessToken {
     agencyId: safeString(source.agencyId),
     propertyId: optionalString(source.propertyId),
     teamMemberId: optionalString(source.teamMemberId),
+    sellerId: optionalString(source.sellerId),
+    sellerToken: optionalString(source.sellerToken),
+    email: optionalString(cleanEmail(safeString(source.email))),
     createdAt,
+    usedAt: optionalString(source.usedAt),
+    expiresAt: optionalString(source.expiresAt),
+    passwordHash: optionalString(source.passwordHash),
   };
 }
 
@@ -1051,11 +1453,16 @@ function isTeamRole(value: unknown): value is TeamRole {
 }
 
 function isTeamMemberStatus(value: unknown): value is TeamMemberStatus {
-  return value === "active" || value === "disabled";
+  return value === "invited" || value === "active" || value === "disabled";
 }
 
 function isAccessTokenType(value: unknown): value is AccessTokenType {
-  return value === "manager" || value === "agent" || value === "seller";
+  return (
+    value === "manager" ||
+    value === "agent" ||
+    value === "seller" ||
+    isInviteAccessType(value)
+  );
 }
 
 function isAgencyLeadStatus(value: unknown): value is AgencyLeadStatus {
@@ -1080,6 +1487,36 @@ function isPropertyPublicStatus(
   );
 }
 
+function invalidInviteResult(
+  status: "invalid" | "used" | "expired" = "invalid",
+  access?: AccessToken | null,
+  agency?: Agency | null,
+): InviteAccessLookup {
+  return {
+    status,
+    title: "Lien invalide ou expiré",
+    message:
+      "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    access,
+    agency,
+  };
+}
+
+function updateStoredAccessToken(id: string, data: Partial<AccessToken>) {
+  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
+    coerceAccessToken,
+  );
+  const nextTokens = tokens.map((token) =>
+    token.id === id ? { ...token, ...data } : token,
+  );
+  writeStored(TOKENS_KEY, nextTokens);
+  return nextTokens.find((token) => token.id === id) ?? null;
+}
+
+function createPilotPasswordMarker(password: string) {
+  return `pilot:${password.length}:${randomId()}`;
+}
+
 function getPublicAppUrl() {
   const env = import.meta.env as Record<string, string | undefined>;
   return (
@@ -1097,6 +1534,19 @@ function randomId() {
           .join("")
       : Math.random().toString(16).slice(2);
   return random.replace(/[^a-z0-9]/gi, "").slice(0, 18);
+}
+
+function generateAccessTokenValue() {
+  const cryptoApi = globalThis.crypto;
+  if (cryptoApi && "getRandomValues" in cryptoApi) {
+    const bytes = new Uint8Array(32);
+    cryptoApi.getRandomValues(bytes);
+    return Array.from(bytes)
+      .map((byte) => byte.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  return `${randomId()}${Date.now().toString(36)}${randomId()}${randomId()}`;
 }
 
 function encodeAccessToken(
@@ -1137,7 +1587,12 @@ function decodeAccessToken(token: string): AccessToken | null {
       agencyId: payload.agencyId,
       propertyId: payload.propertyId,
       teamMemberId: payload.teamMemberId,
+      sellerId: payload.sellerId,
+      sellerToken: payload.sellerToken,
+      email: payload.email,
       createdAt: payload.createdAt,
+      usedAt: payload.usedAt,
+      expiresAt: payload.expiresAt,
     };
   } catch {
     return null;

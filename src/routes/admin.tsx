@@ -26,7 +26,7 @@ import {
 } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { sendManagerAccessEmail } from "@/lib/api/agency-email.functions";
+import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
   clearAdminSession,
   isAdminSessionActive,
@@ -35,18 +35,18 @@ import {
 import {
   activateAgency,
   addTeamMember,
-  buildManagerActivationEmail,
   consumeStorageResetNotice,
   createAgency,
+  createTeamMemberInviteEmail,
   disableAgency,
   generateAgencySlug,
-  getActiveManagers,
   getAgents,
   getAgencies,
   getAgencyLinks,
   getManagers,
   removeAgency,
   type Agency,
+  type TeamMember,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
 
@@ -210,7 +210,7 @@ function AdminDashboard() {
     });
   }
 
-  function onCreateAgency(event: FormEvent<HTMLFormElement>) {
+  async function onCreateAgency(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (
       !isValidEmail(form.estimationEmail) ||
@@ -229,24 +229,39 @@ function AdminDashboard() {
       phone: form.phone,
       primaryColor: form.primaryColor,
     });
-    addTeamMember(agency.id, {
+    const manager = addTeamMember(agency.id, {
       firstName: form.managerFirstName,
       lastName: form.managerLastName,
       email: form.managerEmail,
       phone: "",
       role: "manager",
-      status: "active",
+      status: "invited",
     });
+    const email = createTeamMemberInviteEmail(agency, manager);
+    const result = await sendTeamInviteEmail(
+      agency.name,
+      manager,
+      email.accessUrl,
+    );
     resetCreateForm();
     setShowCreateForm(false);
-    setManualAccessLink("");
-    setFeedback("Agence créée en mode démo.");
+    if (result.sent) {
+      setManualAccessLink("");
+      setFeedback("Agence créée en mode démo. Email d’invitation envoyé au patron.");
+    } else {
+      setManualAccessLink(email.accessUrl ?? "");
+      setFeedback(
+        "Agence créée en mode démo. Invitation créée. Email non envoyé : configuration email manquante.",
+      );
+    }
     refresh();
   }
 
   async function onActivate(agency: Agency) {
     setManualAccessLink("");
-    const managers = getActiveManagers(agency.id);
+    const managers = getManagers(agency.id).filter(
+      (manager) => manager.status !== "disabled",
+    );
     if (!managers.length) {
       setFeedback("Ajoutez au moins un patron avant d’activer l’agence.");
       return;
@@ -268,23 +283,12 @@ function AdminDashboard() {
     const updated = activateAgency(agency.id);
     if (!updated) return;
     const emails = managers.map((manager) =>
-      buildManagerActivationEmail(updated, manager),
+      createTeamMemberInviteEmail(updated, manager),
     );
     const results = await Promise.all(
-      emails.map(async (email) => {
-        try {
-          return await sendManagerAccessEmail({
-            data: {
-              to: email.to,
-              subject: email.subject,
-              body: email.body,
-            },
-          });
-        } catch (error) {
-          console.info("Email non envoyé : RESEND_API_KEY manquante", error);
-          return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
-        }
-      }),
+      managers.map((manager, index) =>
+        sendTeamInviteEmail(updated.name, manager, emails[index]?.accessUrl),
+      ),
     );
 
     const sentCount = results.filter((result) => result.sent).length;
@@ -513,6 +517,28 @@ function AdminDashboard() {
   );
 }
 
+async function sendTeamInviteEmail(
+  agencyName: string,
+  member: TeamMember,
+  accessUrl = "",
+) {
+  try {
+    return await sendInviteEmail({
+      data: {
+        inviteType:
+          member.role === "manager" ? "manager_invite" : "agent_invite",
+        agencyName,
+        recipientEmail: member.email,
+        recipientFirstName: member.firstName,
+        accessUrl,
+      },
+    });
+  } catch (error) {
+    console.info("Invitation non envoyée", error);
+    return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
+  }
+}
+
 function AgencyCard({
   agency,
   onActivate,
@@ -526,7 +552,9 @@ function AgencyCard({
 }) {
   const managers = getManagers(agency.id);
   const agents = getAgents(agency.id);
-  const mainManager = managers.find((manager) => manager.status === "active");
+  const mainManager =
+    managers.find((manager) => manager.status === "active") ??
+    managers.find((manager) => manager.status === "invited");
   const links = getAgencyLinks(agency.slug);
 
   return (
