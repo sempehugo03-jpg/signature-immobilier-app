@@ -138,6 +138,7 @@ const PROPERTIES_KEY = "signature_saas_properties";
 const LEADS_KEY = "signature_saas_leads";
 const TOKENS_KEY = "signature_saas_access_tokens";
 const ACCESS_SESSION_KEY = "signature_saas_current_access";
+const STORAGE_RESET_NOTICE_KEY = "signature_saas_storage_reset";
 
 const defaultTimestamp = "2026-01-01T00:00:00.000Z";
 
@@ -184,7 +185,7 @@ export const defaultAgencies: Agency[] = [
 ];
 
 export function getAgencies() {
-  return mergeAgencies(readStored<Agency[]>(AGENCIES_KEY, []));
+  return mergeAgencies(readStored<unknown[]>(AGENCIES_KEY, []));
 }
 
 export function getAgencyBySlug(slug: string) {
@@ -275,39 +276,55 @@ export function disableAgency(id: string) {
 
 export function removeAgency(id: string) {
   const agency = getAgencyById(id);
-  const removedIds = readStored<string[]>(REMOVED_AGENCIES_KEY, []);
+  const removedIds = safeStringArray(
+    readStored<unknown[]>(REMOVED_AGENCIES_KEY, []),
+  );
   writeStored(REMOVED_AGENCIES_KEY, Array.from(new Set([...removedIds, id])));
   writeStored(
     AGENCIES_KEY,
-    readStored<Agency[]>(AGENCIES_KEY, []).filter((item) => item.id !== id),
+    readStored<Partial<Agency>[]>(AGENCIES_KEY, [])
+      .map(coerceAgency)
+      .filter((item) => item.id !== id),
   );
   writeStored(
     TEAM_KEY,
-    readStored<TeamMember[]>(TEAM_KEY, []).filter(
-      (member) => member.agencyId !== id,
-    ),
+    readStored<Partial<TeamMember>[]>(TEAM_KEY, [])
+      .map(coerceTeamMember)
+      .filter((member) => member.agencyId !== id),
   );
   writeStored(
     PROPERTIES_KEY,
-    readStored<AgencyProperty[]>(PROPERTIES_KEY, []).filter(
-      (property) => property.agencyId !== id,
-    ),
+    readStored<Partial<AgencyProperty>[]>(PROPERTIES_KEY, [])
+      .map(coerceProperty)
+      .filter((property) => property.agencyId !== id),
   );
   writeStored(
     TOKENS_KEY,
-    readStored<AccessToken[]>(TOKENS_KEY, []).filter(
-      (token) => token.agencyId !== id,
-    ),
+    readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
+      .map(coerceAccessToken)
+      .filter((token) => token.agencyId !== id),
   );
   if (agency) {
     writeStored(
       LEADS_KEY,
-      readStored<AgencyLead[]>(LEADS_KEY, []).filter(
-        (lead) => lead.agencySlug !== agency.slug,
-      ),
+      readStored<Partial<AgencyLead>[]>(LEADS_KEY, [])
+        .map(coerceLead)
+        .filter((lead) => lead.agencySlug !== agency.slug),
     );
   }
   return true;
+}
+
+export function consumeStorageResetNotice() {
+  if (typeof window === "undefined") return false;
+  try {
+    const value = window.sessionStorage.getItem(STORAGE_RESET_NOTICE_KEY);
+    window.sessionStorage.removeItem(STORAGE_RESET_NOTICE_KEY);
+    return value === "true";
+  } catch (error) {
+    console.warn("Lecture de notification locale impossible", error);
+    return false;
+  }
 }
 
 export function generateAgencySlug(name: string) {
@@ -353,10 +370,7 @@ export function getActiveManagers(agencyId: string) {
 
 export function addTeamMember(
   agencyId: string,
-  data: Pick<
-    TeamMember,
-    "firstName" | "lastName" | "email" | "role"
-  > &
+  data: Pick<TeamMember, "firstName" | "lastName" | "email" | "role"> &
     Partial<Pick<TeamMember, "phone" | "status">>,
 ) {
   const now = new Date().toISOString();
@@ -411,9 +425,9 @@ export function deleteTeamMember(memberId: string) {
   writeStored(TEAM_KEY, nextMembers);
   writeStored(
     TOKENS_KEY,
-    readStored<AccessToken[]>(TOKENS_KEY, []).filter(
-      (token) => token.teamMemberId !== memberId,
-    ),
+    readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
+      .map(coerceAccessToken)
+      .filter((token) => token.teamMemberId !== memberId),
   );
   return nextMembers;
 }
@@ -464,8 +478,9 @@ export function getAgencyProperties(agency: Agency) {
 
 export function getAgencyProperty(agency: Agency, propertyId: string) {
   return (
-    getAgencyProperties(agency).find((property) => property.id === propertyId) ??
-    null
+    getAgencyProperties(agency).find(
+      (property) => property.id === propertyId,
+    ) ?? null
   );
 }
 
@@ -479,7 +494,9 @@ export function saveAgencyProperty(property: AgencyProperty) {
     ...properties.filter((item) => item.id !== nextProperty.id),
   ];
   writeStored(PROPERTIES_KEY, nextProperties);
-  return nextProperties.filter((item) => item.agencyId === nextProperty.agencyId);
+  return nextProperties.filter(
+    (item) => item.agencyId === nextProperty.agencyId,
+  );
 }
 
 export function createSellerAccessForProperty(property: AgencyProperty) {
@@ -503,9 +520,9 @@ export function getSellerAccessLink(property: AgencyProperty) {
 }
 
 export function getAgencyLeads(slug: string) {
-  return readStored<AgencyLead[]>(LEADS_KEY, []).filter(
-    (lead) => lead.agencySlug === slug,
-  );
+  return readStored<Partial<AgencyLead>[]>(LEADS_KEY, [])
+    .map(coerceLead)
+    .filter((lead) => lead.agencySlug === slug);
 }
 
 export function saveAgencyLead(
@@ -519,13 +536,15 @@ export function saveAgencyLead(
   };
   writeStored(LEADS_KEY, [
     nextLead,
-    ...readStored<AgencyLead[]>(LEADS_KEY, []),
+    ...readStored<Partial<AgencyLead>[]>(LEADS_KEY, []).map(coerceLead),
   ]);
   return nextLead;
 }
 
 export function updateAgencyLeadStatus(id: string, status: AgencyLeadStatus) {
-  const leads = readStored<AgencyLead[]>(LEADS_KEY, []);
+  const leads = readStored<Partial<AgencyLead>[]>(LEADS_KEY, []).map(
+    coerceLead,
+  );
   const nextLeads = leads.map((lead) =>
     lead.id === id ? { ...lead, status } : lead,
   );
@@ -554,7 +573,9 @@ export function createAccessToken(
     teamMemberId: data.teamMemberId,
     createdAt,
   };
-  const tokens = readStored<AccessToken[]>(TOKENS_KEY, []);
+  const tokens = readStored<Partial<AccessToken>[]>(TOKENS_KEY, []).map(
+    coerceAccessToken,
+  );
   writeStored(TOKENS_KEY, [
     access,
     ...tokens.filter(
@@ -571,9 +592,9 @@ export function createAccessToken(
 }
 
 export function getAccessToken(tokenValue: string) {
-  const stored = readStored<AccessToken[]>(TOKENS_KEY, []).find(
-    (token) => token.token === tokenValue,
-  );
+  const stored = readStored<Partial<AccessToken>[]>(TOKENS_KEY, [])
+    .map(coerceAccessToken)
+    .find((token) => token.token === tokenValue);
   if (stored) return stored;
   return decodeAccessToken(tokenValue);
 }
@@ -603,10 +624,12 @@ export function saveAgencyAccessSession(access: AccessToken) {
 }
 
 export function getCurrentAgencyAccess(agencyId?: string) {
-  const access =
-    readSessionStored<AccessToken | null>(ACCESS_SESSION_KEY, null) ??
-    readStored<AccessToken | null>(ACCESS_SESSION_KEY, null);
-  if (!access) return null;
+  const rawAccess =
+    readSessionStored<Partial<AccessToken> | null>(ACCESS_SESSION_KEY, null) ??
+    readStored<Partial<AccessToken> | null>(ACCESS_SESSION_KEY, null);
+  if (!isRecord(rawAccess)) return null;
+  const access = coerceAccessToken(rawAccess);
+  if (!access.token || !access.agencyId) return null;
   if (agencyId && access.agencyId !== agencyId) return null;
   return access;
 }
@@ -774,9 +797,16 @@ export function buildEmailContent({
   };
 }
 
-function mergeAgencies(stored: Agency[]) {
-  const removedIds = new Set(readStored<string[]>(REMOVED_AGENCIES_KEY, []));
-  const normalizedStored = stored
+function mergeAgencies(stored: unknown[]) {
+  const removedIds = new Set(
+    safeStringArray(readStored<unknown[]>(REMOVED_AGENCIES_KEY, [])),
+  );
+  const storedRecords = stored.filter((agency) => {
+    if (isRecord(agency)) return true;
+    markStorageReset();
+    return false;
+  });
+  const normalizedStored = storedRecords
     .map(coerceAgency)
     .filter((agency) => !removedIds.has(agency.id));
   const storedIds = new Set(normalizedStored.map((agency) => agency.id));
@@ -790,49 +820,126 @@ function writeAgencies(agencies: Agency[]) {
   writeStored(AGENCIES_KEY, agencies.map(coerceAgency).map(applyAgencyStatus));
 }
 
-function coerceAgency(agency: Partial<Agency>): Agency {
+function coerceAgency(agency: unknown): Agency {
   const now = new Date().toISOString();
+  if (!isRecord(agency)) markStorageReset();
+  const source = isRecord(agency) ? agency : {};
+  const name = safeString(source.name).trim() || "Agence";
   return {
-    id: agency.id ?? `agency-${Date.now()}-${randomId()}`,
-    slug: normalizeSlug(agency.slug || agency.name || "agence"),
-    name: agency.name?.trim() || "Agence",
-    city: agency.city?.trim() ?? "",
-    logoUrl: agency.logoUrl?.trim() ?? "",
-    phone: agency.phone?.trim() ?? "",
-    primaryColor: agency.primaryColor?.trim() || "#111111",
-    status: agency.status ?? "demo",
-    plan: agency.plan ?? "demo",
-    estimationEmail: cleanEmail(agency.estimationEmail ?? agency.email ?? ""),
-    publicEnabled: agency.publicEnabled ?? true,
-    activatedAt: agency.activatedAt,
-    createdAt: agency.createdAt ?? now,
-    updatedAt: agency.updatedAt ?? agency.createdAt ?? now,
-    features: agency.features ?? demoFeatures,
-    email: cleanEmail(agency.email ?? ""),
+    id: safeString(source.id, `agency-${Date.now()}-${randomId()}`),
+    slug: normalizeSlug(safeString(source.slug) || name || "agence"),
+    name,
+    city: safeString(source.city).trim(),
+    logoUrl: safeString(source.logoUrl).trim(),
+    phone: safeString(source.phone).trim(),
+    primaryColor:
+      safeString(source.primaryColor, "#111111").trim() || "#111111",
+    status: isAgencyStatus(source.status) ? source.status : "demo",
+    plan: isAgencyPlan(source.plan) ? source.plan : "demo",
+    estimationEmail: cleanEmail(
+      safeString(source.estimationEmail) || safeString(source.email),
+    ),
+    publicEnabled: safeBoolean(source.publicEnabled, true),
+    activatedAt: optionalString(source.activatedAt),
+    createdAt: safeString(source.createdAt, now),
+    updatedAt:
+      safeString(source.updatedAt) || safeString(source.createdAt, now),
+    features: coerceFeatures(source.features, demoFeatures),
+    email: cleanEmail(safeString(source.email)),
   };
 }
 
-function coerceTeamMember(member: Partial<TeamMember>): TeamMember {
+function coerceTeamMember(member: unknown): TeamMember {
   const now = new Date().toISOString();
+  if (!isRecord(member)) markStorageReset();
+  const source = isRecord(member) ? member : {};
   return {
-    id: member.id ?? `member-${Date.now()}-${randomId()}`,
-    agencyId: member.agencyId ?? "",
-    firstName: member.firstName?.trim() ?? "",
-    lastName: member.lastName?.trim() ?? "",
-    email: cleanEmail(member.email ?? ""),
-    phone: member.phone?.trim() ?? "",
-    role: member.role ?? "agent",
-    status: member.status ?? "active",
-    createdAt: member.createdAt ?? now,
-    updatedAt: member.updatedAt ?? member.createdAt ?? now,
+    id: safeString(source.id, `member-${Date.now()}-${randomId()}`),
+    agencyId: safeString(source.agencyId),
+    firstName: safeString(source.firstName).trim(),
+    lastName: safeString(source.lastName).trim(),
+    email: cleanEmail(safeString(source.email)),
+    phone: safeString(source.phone).trim(),
+    role: isTeamRole(source.role) ? source.role : "agent",
+    status: isTeamMemberStatus(source.status) ? source.status : "active",
+    createdAt: safeString(source.createdAt, now),
+    updatedAt:
+      safeString(source.updatedAt) || safeString(source.createdAt, now),
   };
 }
 
-function coerceProperty(property: AgencyProperty): AgencyProperty {
+function coerceProperty(property: unknown): AgencyProperty {
+  if (!isRecord(property)) markStorageReset();
+  const source = isRecord(property) ? property : {};
+  const fallbackImage = agencyConfig.properties[0]?.coverImage ?? "";
   return {
-    ...property,
-    sellerToken: property.sellerToken ?? "",
-    documents: property.documents ?? [],
+    id: safeString(source.id, `property-${Date.now()}-${randomId()}`),
+    agencyId: safeString(source.agencyId),
+    title: safeString(source.title, "Bien sans titre"),
+    type: safeString(source.type, "Maison"),
+    city: safeString(source.city),
+    address: safeString(source.address),
+    price: safeString(source.price),
+    surface: safeString(source.surface),
+    rooms: safeString(source.rooms),
+    bedrooms: safeString(source.bedrooms),
+    publicStatus: isPropertyPublicStatus(source.publicStatus)
+      ? source.publicStatus
+      : "Disponible",
+    internalStatus: safeString(source.internalStatus, "Annonce publiée"),
+    nextVisit: safeString(source.nextVisit, "À planifier"),
+    report: safeString(
+      source.report,
+      "Aucun compte rendu disponible pour le moment.",
+    ),
+    description: safeString(source.description),
+    image: safeString(source.image, fallbackImage),
+    sellerToken: safeString(source.sellerToken),
+    documents: safeStringArray(source.documents),
+  };
+}
+
+function coerceLead(lead: unknown): AgencyLead {
+  const now = new Date().toISOString();
+  if (!isRecord(lead)) markStorageReset();
+  const source = isRecord(lead) ? lead : {};
+  return {
+    id: safeString(source.id, `lead-${Date.now()}-${randomId()}`),
+    agencySlug: safeString(source.agencySlug),
+    agencyName: safeString(source.agencyName),
+    firstName: safeString(source.firstName),
+    lastName: safeString(source.lastName),
+    phone: safeString(source.phone),
+    email: cleanEmail(safeString(source.email)),
+    propertyType: safeString(source.propertyType),
+    propertyCity: safeString(source.propertyCity),
+    surface: safeString(source.surface),
+    rooms: safeString(source.rooms),
+    propertyState: safeString(source.propertyState),
+    exterior: safeString(source.exterior),
+    parking: safeString(source.parking),
+    sellingDelay: safeString(source.sellingDelay),
+    estimateLow: optionalString(source.estimateLow),
+    estimateHigh: optionalString(source.estimateHigh),
+    answers: optionalString(source.answers),
+    status: isAgencyLeadStatus(source.status) ? source.status : "Nouveau",
+    createdAt: safeString(source.createdAt, now),
+  };
+}
+
+function coerceAccessToken(access: unknown): AccessToken {
+  const now = new Date().toISOString();
+  if (!isRecord(access)) markStorageReset();
+  const source = isRecord(access) ? access : {};
+  const createdAt = safeString(source.createdAt, now);
+  return {
+    id: safeString(source.id, `access-${createdAt}-${randomId()}`),
+    token: safeString(source.token),
+    type: isAccessTokenType(source.type) ? source.type : "seller",
+    agencyId: safeString(source.agencyId),
+    propertyId: optionalString(source.propertyId),
+    teamMemberId: optionalString(source.teamMemberId),
+    createdAt,
   };
 }
 
@@ -871,6 +978,105 @@ function normalizeSlug(value: string) {
 
 function cleanEmail(value: string) {
   return value.trim().toLowerCase();
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function safeString(value: unknown, fallback = "") {
+  return typeof value === "string" ? value : fallback;
+}
+
+function optionalString(value: unknown) {
+  const nextValue = safeString(value);
+  return nextValue || undefined;
+}
+
+function safeStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
+function safeBoolean(value: unknown, fallback: boolean) {
+  return typeof value === "boolean" ? value : fallback;
+}
+
+function coerceFeatures(
+  features: unknown,
+  fallback: AgencyFeatures,
+): AgencyFeatures {
+  const source = isRecord(features) ? features : {};
+  return {
+    canCreateProperties: safeBoolean(
+      source.canCreateProperties,
+      fallback.canCreateProperties,
+    ),
+    canEditProperties: safeBoolean(
+      source.canEditProperties,
+      fallback.canEditProperties,
+    ),
+    canGenerateSellerLinks: safeBoolean(
+      source.canGenerateSellerLinks,
+      fallback.canGenerateSellerLinks,
+    ),
+    canReceiveLeads: safeBoolean(
+      source.canReceiveLeads,
+      fallback.canReceiveLeads,
+    ),
+    canManageDocuments: safeBoolean(
+      source.canManageDocuments,
+      fallback.canManageDocuments,
+    ),
+    canPublishProperties: safeBoolean(
+      source.canPublishProperties,
+      fallback.canPublishProperties,
+    ),
+    canManageTeam: safeBoolean(source.canManageTeam, fallback.canManageTeam),
+  };
+}
+
+function isAgencyStatus(value: unknown): value is AgencyStatus {
+  return value === "demo" || value === "active" || value === "disabled";
+}
+
+function isAgencyPlan(value: unknown): value is AgencyPlan {
+  return value === "demo" || value === "pilot";
+}
+
+function isTeamRole(value: unknown): value is TeamRole {
+  return value === "manager" || value === "agent";
+}
+
+function isTeamMemberStatus(value: unknown): value is TeamMemberStatus {
+  return value === "active" || value === "disabled";
+}
+
+function isAccessTokenType(value: unknown): value is AccessTokenType {
+  return value === "manager" || value === "agent" || value === "seller";
+}
+
+function isAgencyLeadStatus(value: unknown): value is AgencyLeadStatus {
+  return (
+    value === "Nouveau" ||
+    value === "Rappelé" ||
+    value === "Converti" ||
+    value === "Perdu"
+  );
+}
+
+function isPropertyPublicStatus(
+  value: unknown,
+): value is AgencyProperty["publicStatus"] {
+  return (
+    value === "Disponible" ||
+    value === "Nouveauté" ||
+    value === "Exclusivité" ||
+    value === "Sous offre" ||
+    value === "Vendu" ||
+    value === "Coup de cœur"
+  );
 }
 
 function getPublicAppUrl() {
@@ -917,7 +1123,12 @@ function decodeAccessToken(token: string): AccessToken | null {
     const payload = JSON.parse(json) as Partial<AccessToken> & {
       nonce?: string;
     };
-    if (!payload.type || !payload.agencyId || !payload.createdAt) return null;
+    if (
+      !isAccessTokenType(payload.type) ||
+      !payload.agencyId ||
+      !payload.createdAt
+    )
+      return null;
     return {
       id: `decoded-${payload.createdAt}-${payload.nonce ?? "token"}`,
       token,
@@ -936,9 +1147,16 @@ function readStored<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.localStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) {
+      resetStoredKey(key);
+      return fallback;
+    }
+    return parsed as T;
   } catch (error) {
     console.warn(`Lecture localStorage impossible pour ${key}`, error);
+    resetStoredKey(key);
     return fallback;
   }
 }
@@ -947,10 +1165,49 @@ function readSessionStored<T>(key: string, fallback: T): T {
   if (typeof window === "undefined") return fallback;
   try {
     const raw = window.sessionStorage.getItem(key);
-    return raw ? (JSON.parse(raw) as T) : fallback;
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as unknown;
+    if (Array.isArray(fallback) && !Array.isArray(parsed)) {
+      resetSessionKey(key);
+      return fallback;
+    }
+    return parsed as T;
   } catch (error) {
     console.warn(`Lecture sessionStorage impossible pour ${key}`, error);
+    resetSessionKey(key);
     return fallback;
+  }
+}
+
+function markStorageReset() {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(STORAGE_RESET_NOTICE_KEY, "true");
+  } catch (error) {
+    console.warn("Notification de réinitialisation locale impossible", error);
+  }
+}
+
+function resetStoredKey(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(key);
+    markStorageReset();
+  } catch (error) {
+    console.warn(`Réinitialisation localStorage impossible pour ${key}`, error);
+  }
+}
+
+function resetSessionKey(key: string) {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(key);
+    markStorageReset();
+  } catch (error) {
+    console.warn(
+      `Réinitialisation sessionStorage impossible pour ${key}`,
+      error,
+    );
   }
 }
 
