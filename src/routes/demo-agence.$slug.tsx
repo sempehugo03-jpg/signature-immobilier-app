@@ -4,7 +4,14 @@ import {
   Outlet,
   useRouterState,
 } from "@tanstack/react-router";
-import { ArrowRight, BriefcaseBusiness, Calculator, Home, UserRound } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  BriefcaseBusiness,
+  Calculator,
+  Home,
+  UserRound,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -81,6 +88,21 @@ function DemoAgencyHub({ slug }: { slug: string }) {
       />
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
+        <div className="mb-7 flex flex-wrap items-center justify-between gap-3">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/admin/agencies/$slug" params={{ slug: agency.slug }}>
+              <ArrowLeft className="h-4 w-4" />
+              Retour à la fiche agence
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+              Accéder à l’espace agence
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+
         <div className="rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm leading-relaxed text-amber-800">
           Version démo — le portail complet est débloqué après activation.
         </div>
@@ -102,11 +124,11 @@ function DemoAgencyHub({ slug }: { slug: string }) {
               Là, vous êtes en version démo.
             </h2>
             <p className="mt-4 text-sm leading-relaxed text-primary/60">
-              Vous pouvez voir l’espace patron, l’espace agent, l’espace
-              vendeur et tester une estimation fictive. Si vous validez, Hugo
-              clique sur Activer l’agence, et ce même portail devient votre vrai
-              outil avec vos biens, vos accès et vos demandes d’estimation
-              envoyées sur votre email.
+              Vous pouvez voir l’espace patron, l’espace agent, l’espace vendeur
+              et tester une estimation fictive. Si vous validez, Hugo clique sur
+              Activer l’agence, et ce même portail devient votre vrai outil avec
+              vos biens, vos accès et vos demandes d’estimation envoyées sur
+              votre email.
             </p>
             <div className="mt-6 rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/65">
               Email de réception des estimations :{" "}

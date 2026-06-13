@@ -1,5 +1,15 @@
 import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Copy, Mail, Power, PowerOff, Trash2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ArrowRight,
+  Copy,
+  Eye,
+  ExternalLink,
+  Mail,
+  Power,
+  PowerOff,
+  Trash2,
+} from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { AgencyTeamManager } from "@/components/agency-team-manager";
@@ -22,6 +32,7 @@ import {
   getAbsoluteAgencyLinks,
   getActiveManagers,
   getAgents,
+  getAgencyLinks,
   getAgencyBySlug,
   getManagers,
   removeAgency,
@@ -184,15 +195,17 @@ function AdminAgencyRoute() {
   }
 
   const links = getAbsoluteAgencyLinks(agency.slug);
+  const routeLinks = getAgencyLinks(agency.slug);
   const managers = getManagers(agency.id);
   const agents = getAgents(agency.id);
+  const statusMessage = getAgencyStatusMessage(agency.status);
 
   return (
     <SaasShell action={<AdminLogoutButton onClick={onLogout} />}>
       <SaasHero
         eyebrow="Contrôle agence"
         title={agency.name}
-        description="Activez le portail, gérez les accès équipe et gardez les liens utiles au même endroit."
+        description="Fiche centrale de l’agence : démo commerciale, vrai espace agence, statut, équipe et liens utiles."
         action={
           <Button asChild variant="outline" className="rounded-full bg-white">
             <Link to="/admin">
@@ -238,7 +251,46 @@ function AdminAgencyRoute() {
                 }
               />
             </div>
+
+            <div className="mt-7 rounded-[22px] border border-[#e8e0d5] bg-[#fffdf9] p-5 text-sm leading-relaxed text-primary/65">
+              {statusMessage}
+            </div>
+
+            <div className="mt-5 grid gap-3">
+              <div className="rounded-2xl bg-[#faf7f0] p-4 text-sm leading-relaxed text-primary/60">
+                <span className="font-medium text-primary">Démo :</span>{" "}
+                utilisée en rendez-vous pour présenter le portail.
+              </div>
+              <div className="rounded-2xl bg-[#faf7f0] p-4 text-sm leading-relaxed text-primary/60">
+                <span className="font-medium text-primary">
+                  Espace agence :
+                </span>{" "}
+                utilisé après activation par le patron et les agents.
+              </div>
+            </div>
+
             <div className="mt-7 flex flex-wrap gap-2">
+              <Button
+                asChild
+                variant="outline"
+                className="rounded-full bg-white"
+              >
+                <Link to={routeLinks.demo}>
+                  <Eye className="h-4 w-4" />
+                  Voir la démo
+                </Link>
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="rounded-full bg-white"
+              >
+                <Link to={routeLinks.portal}>
+                  <ExternalLink className="h-4 w-4" />
+                  Accéder à l’espace agence
+                  <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
               <Button
                 type="button"
                 className="rounded-full"
@@ -271,7 +323,7 @@ function AdminAgencyRoute() {
           <SaasCard className="p-6 md:p-8">
             <SectionTitle
               title="Liens utiles"
-              description="Un lien de démo avant signature, puis un lien unique d’espace agence après activation."
+              description="Deux chemins séparés pour ne jamais mélanger la démo commerciale et le portail activé."
             />
             <div className="mt-6 space-y-3">
               <CopyRow
@@ -465,4 +517,16 @@ function formatDate(value: string) {
     month: "2-digit",
     year: "numeric",
   }).format(new Date(value));
+}
+
+function getAgencyStatusMessage(status: Agency["status"]) {
+  if (status === "active") {
+    return "Cette agence est activée. Les fonctions sont débloquées et les estimations partent à l’email configuré.";
+  }
+
+  if (status === "disabled") {
+    return "Cette agence est désactivée. Le portail est bloqué.";
+  }
+
+  return "Cette agence est en démo. Elle peut voir le portail, mais les fonctions réelles sont verrouillées.";
 }
