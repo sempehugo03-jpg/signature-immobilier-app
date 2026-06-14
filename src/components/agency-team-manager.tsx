@@ -1,4 +1,12 @@
-import { Mail, RotateCcw, Trash2, UserRoundPlus, UserX } from "lucide-react";
+import {
+  Copy,
+  ExternalLink,
+  Mail,
+  RotateCcw,
+  Trash2,
+  UserRoundPlus,
+  UserX,
+} from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import { Field, SectionTitle, StatusBadge } from "@/components/agency-saas-ui";
@@ -44,6 +52,7 @@ export function AgencyTeamManager({
   const [agents, setAgents] = useState<TeamMember[]>([]);
   const [feedback, setFeedback] = useState("");
   const [manualInviteLink, setManualInviteLink] = useState("");
+  const [manualInviteCopied, setManualInviteCopied] = useState(false);
 
   useEffect(() => {
     refresh();
@@ -77,6 +86,7 @@ export function AgencyTeamManager({
     const agency = getAgencyById(agencyId);
     if (!agency) {
       setManualInviteLink("");
+      setManualInviteCopied(false);
       setFeedback("Agence introuvable.");
       return;
     }
@@ -90,14 +100,32 @@ export function AgencyTeamManager({
 
     if (result.sent) {
       setManualInviteLink("");
+      setManualInviteCopied(false);
       setFeedback(`${successPrefix}. Email d’invitation envoyé.`);
       return;
     }
 
     setManualInviteLink(email.accessUrl ?? "");
+    setManualInviteCopied(false);
     setFeedback(
       `${successPrefix}. Invitation créée. Email non envoyé : configuration email manquante.`,
     );
+  }
+
+  async function onCopyManualInviteLink() {
+    if (!manualInviteLink) return;
+    await navigator.clipboard?.writeText(manualInviteLink);
+    setManualInviteCopied(true);
+  }
+
+  function onOpenManualInviteLink() {
+    if (!manualInviteLink) return;
+    const opened = window.open(
+      manualInviteLink,
+      "_blank",
+      "noopener,noreferrer",
+    );
+    if (opened) opened.opener = null;
   }
 
   function onDelete(member: TeamMember) {
@@ -108,6 +136,7 @@ export function AgencyTeamManager({
     if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteCopied(false);
     setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
     refresh();
   }
@@ -115,6 +144,7 @@ export function AgencyTeamManager({
   function onDisable(member: TeamMember) {
     disableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteCopied(false);
     setFeedback(
       member.role === "manager" ? "Patron désactivé." : "Agent désactivé.",
     );
@@ -124,6 +154,7 @@ export function AgencyTeamManager({
   function onEnable(member: TeamMember) {
     enableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteCopied(false);
     setFeedback(
       member.role === "manager" ? "Patron réactivé." : "Agent réactivé.",
     );
@@ -137,8 +168,33 @@ export function AgencyTeamManager({
         <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
           {feedback}
           {manualInviteLink && (
-            <div className="mt-2 break-all font-medium">
-              Lien d’invitation à copier : {manualInviteLink}
+            <div className="mt-3 rounded-2xl border border-emerald-100 bg-white/70 p-3">
+              <div className="break-all font-medium">
+                Lien d’invitation à copier : {manualInviteLink}
+              </div>
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={onCopyManualInviteLink}
+                >
+                  <Copy className="h-4 w-4" />
+                  Copier le lien
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={onOpenManualInviteLink}
+                >
+                  <ExternalLink className="h-4 w-4" />
+                  Ouvrir le lien
+                </Button>
+              </div>
+              {manualInviteCopied && (
+                <div className="mt-2 text-sm font-medium">Lien copié.</div>
+              )}
             </div>
           )}
         </div>
