@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button";
 import {
   getAgencyBySlug,
   getAgencyLeads,
+  leadStatusLabel,
   updateAgencyLeadStatus,
   type Agency,
   type AgencyLead,
@@ -26,12 +27,7 @@ export const Route = createFileRoute("/agence/$slug/estimations")({
   component: AgencyEstimationsRoute,
 });
 
-const statuses: AgencyLeadStatus[] = [
-  "Nouveau",
-  "Rappelé",
-  "Converti",
-  "Perdu",
-];
+const statuses: AgencyLeadStatus[] = ["new", "contacted", "archived"];
 
 function AgencyEstimationsRoute() {
   const { slug } = Route.useParams();
@@ -84,7 +80,11 @@ function AgencyEstimationsRoute() {
       />
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
-        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
+        <Button
+          asChild
+          variant="outline"
+          className="mb-7 rounded-full bg-white"
+        >
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour au portail
@@ -140,7 +140,7 @@ function LeadCard({
             {lead.propertyType} — {lead.propertyCity}
           </p>
         </div>
-        <StatusBadge status={lead.status} />
+        <StatusBadge status={leadStatusLabel(lead.status)} />
       </div>
 
       <div className="mt-5 grid gap-3 text-sm sm:grid-cols-2">
@@ -177,7 +177,7 @@ function LeadCard({
             className="rounded-full"
             onClick={() => onStatus(lead.id, status)}
           >
-            {status}
+            {leadStatusLabel(status)}
           </Button>
         ))}
       </div>

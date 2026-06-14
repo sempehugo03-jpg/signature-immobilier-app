@@ -4,9 +4,7 @@ import {
   ArrowRight,
   Camera,
   CheckCircle2,
-  ExternalLink,
   Home,
-  Mail,
   MapPin,
   Ruler,
   UserRound,
@@ -16,6 +14,13 @@ import { useState } from "react";
 import { EstimateStep } from "@/components/estimate-step";
 import { SiteLayout } from "@/components/site-layout";
 import { agencyConfig } from "@/lib/agency-config";
+import { sendLeadNotificationEmail } from "@/lib/api/agency-email.functions";
+import {
+  buildLeadEmail,
+  getAgencyNotificationRecipients,
+  getPrimaryPublicAgency,
+  saveAgencyLead,
+} from "@/lib/agency-saas";
 import {
   computeScore,
   saveDiagnostic,
@@ -41,21 +46,6 @@ type DiagnosticDraft = Omit<
   Diagnostic,
   "id" | "createdAt" | "score" | "temperature"
 >;
-
-const ESTIMATE_CALLBACK_RECIPIENTS = [
-  "sempehugo03@gmail.com",
-  "sempehugo03@gmail.com",
-] as const;
-
-const ESTIMATE_CALLBACK_SUBJECT =
-  "Nouvelle demande de rappel estimation - Signature Immobilier";
-
-type EstimateCallbackEmail = {
-  gmailUrl: string;
-  mailtoUrl: string;
-  body: string;
-  gmailOpened: boolean;
-};
 
 const empty: DiagnosticDraft = {
   bien: {
@@ -102,8 +92,7 @@ const empty: DiagnosticDraft = {
 function Page() {
   const [step, setStep] = useState(0);
   const [submitted, setSubmitted] = useState(false);
-  const [callbackEmail, setCallbackEmail] =
-    useState<EstimateCallbackEmail | null>(null);
+  const [leadCreated, setLeadCreated] = useState(false);
   const [data, setData] = useState<DiagnosticDraft>(empty);
   const steps = agencyConfig.estimation.steps;
 
@@ -117,8 +106,9 @@ function Page() {
     }));
   }
 
-  function submit() {
+  async function submit() {
     const { score, temperature } = computeScore(data);
+    const indicativeEstimate = getIndicativeEstimate(data);
     saveDiagnostic({
       id: crypto.randomUUID(),
       createdAt: new Date().toISOString(),
@@ -126,25 +116,68 @@ function Page() {
       score,
       temperature,
     });
+    const agency = getPrimaryPublicAgency();
+    if (agency) {
+      const lead = saveAgencyLead({
+        agencyId: agency.id,
+        agencySlug: agency.slug,
+        agencyName: agency.name,
+        firstName: data.contact.prenom,
+        lastName: data.contact.nom,
+        phone: data.contact.telephone,
+        email: data.contact.email,
+        propertyAddress: data.bien.adresse,
+        propertyType: data.bien.type,
+        propertyCity: data.bien.ville,
+        surface: data.bien.surface,
+        rooms: data.bien.pieces,
+        propertyState: data.etat.general,
+        exterior: data.bien.exterieur,
+        parking: data.bien.stationnement,
+        sellingDelay: data.projet.delai,
+        estimateLow: formatEstimatePrice(indicativeEstimate.min),
+        estimateHigh: formatEstimatePrice(indicativeEstimate.max),
+        estimatedRangeMin: formatEstimatePrice(indicativeEstimate.min),
+        estimatedRangeMax: formatEstimatePrice(indicativeEstimate.max),
+        message:
+          "Ce prospect souhaite être rappelé pour affiner son estimation.",
+        answers: [
+          `Adresse : ${displayValue(data.bien.adresse)}`,
+          `Ville : ${displayValue(data.bien.ville)}`,
+          `Type : ${displayValue(data.bien.type)}`,
+          `Surface : ${displayValue(data.bien.surface, "m²")}`,
+          `Pièces : ${displayValue(data.bien.pieces)}`,
+          `État : ${displayValue(data.etat.general)}`,
+          `Extérieur : ${displayValue(data.bien.exterieur)}`,
+          `Garage / parking : ${displayValue(data.bien.stationnement)}`,
+          `Fourchette indicative : ${indicativeEstimate.formattedRange}`,
+        ].join("\n"),
+      });
+      const recipients = getAgencyNotificationRecipients(agency);
+      if (recipients.length) {
+        const email = buildLeadEmail(agency, lead);
+        try {
+          await sendLeadNotificationEmail({
+            data: {
+              to: recipients,
+              subject: email.subject,
+              body: email.body,
+            },
+          });
+        } catch (error) {
+          console.info(
+            "Email interne non envoyé : RESEND_API_KEY manquante.",
+            error,
+          );
+        }
+      }
+    }
+    setLeadCreated(true);
     setSubmitted(true);
   }
 
   if (submitted) {
     const indicativeEstimate = getIndicativeEstimate(data);
-    const callbackEmailDraft = buildEstimateCallbackEmail(
-      data,
-      indicativeEstimate,
-    );
-
-    function openCallbackRequest() {
-      const gmailOpened = openGmail(callbackEmailDraft.gmailUrl);
-      setCallbackEmail({ ...callbackEmailDraft, gmailOpened });
-    }
-
-    function openCallbackGmailManually() {
-      const gmailOpened = openGmail(callbackEmailDraft.gmailUrl);
-      setCallbackEmail({ ...callbackEmailDraft, gmailOpened });
-    }
 
     return (
       <SiteLayout variant="public">
@@ -175,62 +208,25 @@ function Page() {
             <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
               {agencyConfig.estimation.finalText}
             </p>
-            {callbackEmail ? (
-              <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5 text-left">
+            {leadCreated && (
+              <div className="mx-auto mt-8 max-w-xl rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5">
                 <div className="font-display text-2xl leading-tight text-primary">
-                  Votre demande de rappel est prête à être envoyée.
+                  Votre demande a bien été transmise.
                 </div>
                 <p className="mt-3 text-sm leading-relaxed text-primary/70">
                   Un conseiller vous rappellera rapidement pour affiner
                   l’estimation de votre bien.
                 </p>
-                {callbackEmail.gmailOpened && (
-                  <p className="mt-3 rounded-2xl border border-emerald-100 bg-white/70 px-4 py-3 text-sm text-primary/70">
-                    L’email de demande de rappel s’est ouvert dans un nouvel
-                    onglet. Il ne vous reste plus qu’à l’envoyer.
-                  </p>
-                )}
-                <div className="mt-5 flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={openCallbackGmailManually}
-                    className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-                  >
-                    <ExternalLink className="h-4 w-4" />
-                    Ouvrir dans Gmail
-                  </button>
-                  <a
-                    href={callbackEmail.mailtoUrl}
-                    className="inline-flex items-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium text-primary transition hover:bg-secondary"
-                  >
-                    <Mail className="h-4 w-4" />
-                    Ouvrir l’application mail
-                  </a>
-                  <Link
-                    to="/"
-                    className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium text-primary transition hover:bg-secondary"
-                  >
-                    Retour à l’accueil
-                  </Link>
-                </div>
-              </div>
-            ) : (
-              <div className="mt-8 flex flex-wrap justify-center gap-3">
-                <button
-                  type="button"
-                  onClick={openCallbackRequest}
-                  className="inline-flex items-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
-                >
-                  Être rappelé pour affiner l’estimation
-                </button>
-                <Link
-                  to="/"
-                  className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
-                >
-                  Retour aux biens
-                </Link>
               </div>
             )}
+            <div className="mt-8 flex flex-wrap justify-center gap-3">
+              <Link
+                to="/"
+                className="inline-flex items-center rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+              >
+                Retour aux biens
+              </Link>
+            </div>
           </div>
         </section>
       </SiteLayout>
@@ -468,7 +464,7 @@ function Page() {
           ) : (
             <button
               type="button"
-              onClick={submit}
+              onClick={() => void submit()}
               disabled={!data.contact.consent}
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90 disabled:opacity-50"
             >
@@ -488,50 +484,6 @@ function Page() {
   );
 }
 
-function buildEstimateCallbackEmail(
-  data: DiagnosticDraft,
-  indicativeEstimate: ReturnType<typeof getIndicativeEstimate>,
-) {
-  const recipients = ESTIMATE_CALLBACK_RECIPIENTS.join(",");
-  const encodedSubject = encodeURIComponent(ESTIMATE_CALLBACK_SUBJECT);
-  const body = [
-    "Nouvelle demande de rappel reçue depuis Signature Immobilier.",
-    "",
-    "Informations du prospect :",
-    "",
-    `* Prénom : ${displayValue(data.contact.prenom)}`,
-    `* Nom : ${displayValue(data.contact.nom)}`,
-    `* Email : ${displayValue(data.contact.email)}`,
-    `* Téléphone : ${displayValue(data.contact.telephone)}`,
-    "",
-    "Informations du bien :",
-    "",
-    `* Ville : ${displayValue(data.bien.ville)}`,
-    `* Type de bien : ${displayValue(data.bien.type)}`,
-    `* Surface : ${displayValue(data.bien.surface, "m²")}`,
-    `* Nombre de pièces : ${displayValue(data.bien.pieces)}`,
-    `* État du bien : ${displayValue(data.etat.general)}`,
-    `* Extérieur : ${displayValue(data.bien.exterieur)}`,
-    `* Garage / parking : ${displayValue(data.bien.stationnement)}`,
-    "",
-    "Estimation indicative :",
-    "",
-    `* Fourchette basse : ${formatEstimatePrice(indicativeEstimate.min)}`,
-    `* Fourchette haute : ${formatEstimatePrice(indicativeEstimate.max)}`,
-    "",
-    "Message :",
-    "Ce prospect souhaite être rappelé pour affiner son estimation.",
-  ].join("\n");
-  const encodedBody = encodeURIComponent(body);
-
-  return {
-    gmailUrl: `https://mail.google.com/mail/?view=cm&fs=1&to=${recipients}&su=${encodedSubject}&body=${encodedBody}`,
-    mailtoUrl: `mailto:${recipients}?subject=${encodedSubject}&body=${encodedBody}`,
-    body,
-    gmailOpened: false,
-  };
-}
-
 function displayValue(value: string, suffix = "") {
   const cleanedValue = value.trim();
   if (!cleanedValue) return "Non renseigné";
@@ -545,15 +497,6 @@ function formatEstimatePrice(value: number) {
     currency: "EUR",
     maximumFractionDigits: 0,
   }).format(value);
-}
-
-function openGmail(gmailUrl: string) {
-  const opened = window.open(gmailUrl, "_blank");
-  if (opened) {
-    opened.opener = null;
-  }
-
-  return Boolean(opened);
 }
 
 function Field({

@@ -1,14 +1,15 @@
 import { ArrowUpRight, BedDouble, Home, MapPin } from "lucide-react";
 
-import { StatusBadge } from "@/components/status-badge";
-import type { Property } from "@/lib/agency-config";
+import { publicStatusLabel, type AgencyProperty } from "@/lib/agency-saas";
 
 type PropertyCardProps = {
-  property: Property;
-  onOpen: (property: Property) => void;
+  property: AgencyProperty;
+  onOpen: (property: AgencyProperty) => void;
 };
 
 export function PropertyCard({ property, onOpen }: PropertyCardProps) {
+  const badge = publicStatusLabel(property.publicStatus);
+
   return (
     <button
       type="button"
@@ -19,13 +20,15 @@ export function PropertyCard({ property, onOpen }: PropertyCardProps) {
       <article className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm transition hover:-translate-y-0.5 hover:shadow-lg">
         <div className="relative aspect-[4/3] overflow-hidden bg-secondary">
           <img
-            src={property.coverImage}
+            src={property.imageUrl || property.image}
             alt={property.title}
             className="h-full w-full object-cover transition duration-500 group-hover:scale-105"
           />
-          <div className="absolute left-3 top-3">
-            <StatusBadge status={property.status} />
-          </div>
+          {badge && (
+            <div className="absolute left-3 top-3 rounded-full border border-white/40 bg-background/90 px-3 py-1 text-xs font-medium text-foreground shadow-sm backdrop-blur">
+              {badge}
+            </div>
+          )}
           <span className="absolute right-3 top-3 grid h-9 w-9 place-items-center rounded-full bg-background/90 text-foreground shadow-sm">
             <ArrowUpRight className="h-4 w-4" />
           </span>

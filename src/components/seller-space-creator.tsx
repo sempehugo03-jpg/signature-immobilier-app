@@ -179,8 +179,8 @@ export function SellerSpaceCreator({
           </p>
           {gmailBlocked && (
             <p className="mt-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              L’accès est prêt. Cliquez sur “Ouvrir dans Gmail” pour envoyer
-              l’invitation.
+              L’accès est prêt. Vous pouvez copier le lien ou préparer l’email
+              manuel d’invitation.
             </p>
           )}
 
@@ -214,7 +214,7 @@ export function SellerSpaceCreator({
               className="inline-flex items-center gap-2 rounded-full border border-[#d8cfc2] bg-white px-4 py-2.5 text-sm font-medium text-primary transition hover:bg-[#faf7f0]"
             >
               <Mail className="h-4 w-4" />
-              Ouvrir l’application mail
+              Préparer un email manuel
             </button>
             <button
               type="button"

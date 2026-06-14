@@ -22,6 +22,15 @@ type InviteEmailPayload = {
   propertyTitle?: string;
 };
 
+type EmailSendResult = {
+  sent: boolean;
+  reason: string | null;
+};
+
+type EmailServerFn<TPayload> = (options: {
+  data: TPayload;
+}) => Promise<EmailSendResult>;
+
 export const sendManagerAccessEmail = createServerFn({
   method: "POST",
 }).handler(async ({ data }) => {
@@ -34,7 +43,7 @@ export const sendManagerAccessEmail = createServerFn({
   }
 
   return sendViaResend(payload, "manager-access");
-});
+}) as unknown as EmailServerFn<EmailPayload>;
 
 export const sendLeadNotificationEmail = createServerFn({
   method: "POST",
@@ -48,7 +57,7 @@ export const sendLeadNotificationEmail = createServerFn({
   }
 
   return sendViaResend(payload, "lead");
-});
+}) as unknown as EmailServerFn<EmailPayload>;
 
 export const sendInviteEmail = createServerFn({
   method: "POST",
@@ -78,7 +87,7 @@ export const sendInviteEmail = createServerFn({
     },
     "invite",
   );
-});
+}) as unknown as EmailServerFn<InviteEmailPayload>;
 
 function normalizeEmailPayload(data: unknown): EmailPayload | null {
   if (!isRecord(data)) return null;
@@ -145,7 +154,11 @@ async function sendViaResend(
   const from = process.env.FROM_EMAIL;
 
   if (!apiKey) {
-    console.info("Email non envoyé : RESEND_API_KEY manquante");
+    console.info(
+      context === "lead"
+        ? "Email interne non envoyé : RESEND_API_KEY manquante."
+        : "Email non envoyé : RESEND_API_KEY manquante",
+    );
     return {
       sent: false,
       reason: "RESEND_API_KEY_MISSING",

@@ -2,35 +2,134 @@ import {
   ArrowLeft,
   Bath,
   BedDouble,
+  CheckCircle2,
   Home,
-  Mail,
   MapPin,
   Phone,
   Ruler,
   Trees,
   X,
 } from "lucide-react";
+import { FormEvent, useState } from "react";
 
-import { agencyConfig, type Property } from "@/lib/agency-config";
+import { sendLeadNotificationEmail } from "@/lib/api/agency-email.functions";
+import {
+  createVisitRequest,
+  getAgencyById,
+  getAgencyNotificationRecipients,
+  type AgencyProperty,
+} from "@/lib/agency-saas";
 
 type PropertyDetailsProps = {
-  property: Property | null;
+  property: AgencyProperty | null;
   onClose: () => void;
 };
 
+const buyerSituations = [
+  "Je suis acheteur sérieux",
+  "Je commence mes recherches",
+  "J’ai déjà vendu mon bien",
+  "J’ai un bien à vendre",
+  "Je suis investisseur",
+  "Autre",
+];
+
+const financingStatuses = [
+  "J’ai un accord bancaire / simulation",
+  "Mon financement est en cours",
+  "Je n’ai pas encore vu ma banque",
+  "Achat comptant",
+  "Je ne sais pas encore",
+];
+
+const buyingTimelines = [
+  "Dès que possible",
+  "Sous 3 mois",
+  "Sous 6 mois",
+  "Plus tard",
+];
+
 export function PropertyDetails({ property, onClose }: PropertyDetailsProps) {
+  const [showVisitForm, setShowVisitForm] = useState(false);
+  const [submitted, setSubmitted] = useState(false);
+  const [form, setForm] = useState({
+    firstName: "",
+    lastName: "",
+    phone: "",
+    email: "",
+    buyerSituation: buyerSituations[0],
+    financingStatus: financingStatuses[0],
+    buyingTimeline: buyingTimelines[0],
+    message: "",
+  });
+
   if (!property) return null;
 
-  const agent =
-    agencyConfig.agents.find((item) => item.id === property.agentId) ??
-    agencyConfig.agents[0];
-  const gallery = property.gallery.length
-    ? property.gallery
-    : [property.coverImage];
+  const agency = getAgencyById(property.agencyId);
+  const gallery = property.photos.length
+    ? property.photos
+        .slice()
+        .sort((a, b) => a.order - b.order)
+        .map((photo) => photo.url)
+    : [property.imageUrl || property.image];
   const secondaryPhotos = gallery.slice(1, 5);
-  const visitSubject = encodeURIComponent(
-    `Demande de visite - ${property.title}`,
-  );
+  const phone = agency?.phone?.trim() || "";
+  const phoneHref = phone ? `tel:${phone.replace(/\s/g, "")}` : "";
+
+  async function onSubmitVisitRequest(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property || !agency) return;
+
+    const request = createVisitRequest({
+      agencyId: agency.id,
+      agencySlug: agency.slug,
+      propertyId: property.id,
+      propertyTitle: property.title,
+      propertyCity: property.city,
+      propertyPrice: property.price,
+      ...form,
+    });
+
+    const recipients = getAgencyNotificationRecipients(agency, property);
+    if (recipients.length) {
+      const body = [
+        "Nouvelle demande de visite reçue depuis Signature Immobilier.",
+        "",
+        "Bien concerné :",
+        `${request.propertyTitle} — ${request.propertyCity}`,
+        `Prix : ${request.propertyPrice}`,
+        "",
+        "Acheteur :",
+        `${request.firstName} ${request.lastName}`,
+        `Téléphone : ${request.phone}`,
+        `Email : ${request.email}`,
+        "",
+        `Situation : ${request.buyerSituation}`,
+        `Financement : ${request.financingStatus}`,
+        `Délai d’achat : ${request.buyingTimeline}`,
+        "",
+        "Message :",
+        request.message || "Non renseigné",
+      ].join("\n");
+
+      try {
+        await sendLeadNotificationEmail({
+          data: {
+            to: recipients,
+            subject: `Nouvelle demande de visite — ${property.title}`,
+            body,
+          },
+        });
+      } catch (error) {
+        console.info(
+          "Email interne non envoyé : RESEND_API_KEY manquante.",
+          error,
+        );
+      }
+    }
+
+    setSubmitted(true);
+  }
 
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto bg-foreground/35 px-4 py-6 backdrop-blur-sm md:px-8">
@@ -87,7 +186,8 @@ export function PropertyDetails({ property, onClose }: PropertyDetailsProps) {
                 <div>
                   <div className="flex items-center gap-2 text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4 text-gold" />
-                    {property.address}, {property.city}
+                    {property.addressOrDistrict || property.address},{" "}
+                    {property.city}
                   </div>
                   <h1 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
                     {property.title}
@@ -114,46 +214,21 @@ export function PropertyDetails({ property, onClose }: PropertyDetailsProps) {
                 <div className="mt-5 grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <Spec
                     icon={Ruler}
-                    label={`${property.surface} m²`}
+                    label={property.surface}
                     detail="Surface"
                   />
-                  <Spec
-                    icon={Home}
-                    label={`${property.rooms} pièces`}
-                    detail="Pièces"
-                  />
+                  <Spec icon={Home} label={property.rooms} detail="Pièces" />
                   <Spec
                     icon={BedDouble}
-                    label={`${property.bedrooms} chambres`}
-                    detail="Nuit"
+                    label={property.bedrooms || "Non renseigné"}
+                    detail="Chambres"
                   />
+                  <Spec icon={Bath} label={property.type} detail="Type" />
                   <Spec
-                    icon={Bath}
-                    label={pluralize(property.bathrooms, "salle de bain")}
-                    detail="Eau"
+                    icon={Trees}
+                    label={property.addressOrDistrict || property.address}
+                    detail="Quartier"
                   />
-                  <Spec
-                    icon={Home}
-                    label={`DPE ${property.dpe}`}
-                    detail="Énergie"
-                  />
-                  <Spec icon={Trees} label={property.land} detail="Extérieur" />
-                </div>
-              </div>
-
-              <div className="mt-10">
-                <h2 className="font-display text-2xl md:text-3xl">
-                  Points forts
-                </h2>
-                <div className="mt-5 flex flex-wrap gap-2">
-                  {property.features.map((feature) => (
-                    <span
-                      key={feature}
-                      className="rounded-full border border-border bg-card px-4 py-2 text-sm text-foreground shadow-sm"
-                    >
-                      {feature}
-                    </span>
-                  ))}
                 </div>
               </div>
             </div>
@@ -167,53 +242,226 @@ export function PropertyDetails({ property, onClose }: PropertyDetailsProps) {
                   Ce bien vous intéresse ?
                 </h2>
                 <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-                  Contactez l’agence pour organiser une visite ou obtenir plus
-                  d’informations.
+                  Laissez vos informations. Un conseiller vous rappelle pour
+                  confirmer votre situation et organiser une visite si le bien
+                  correspond à votre projet.
                 </p>
 
-                {agent && (
-                  <div className="mt-6 flex items-center gap-3 rounded-2xl bg-secondary/70 p-4">
-                    <div className="grid h-12 w-12 place-items-center rounded-full bg-primary text-primary-foreground font-display text-lg">
-                      {agent.name
-                        .split(" ")
-                        .map((part) => part[0])
-                        .join("")
-                        .slice(0, 2)}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="font-medium">{agent.name}</div>
-                      <a
-                        href={agent.phoneHref}
-                        className="text-sm text-muted-foreground hover:text-foreground"
-                      >
-                        {agent.phone}
-                      </a>
-                    </div>
-                  </div>
-                )}
-
                 <div className="mt-6 grid gap-3">
-                  <a
-                    href={`mailto:${agencyConfig.contact.email}?subject=${visitSubject}`}
-                    className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowVisitForm(true);
+                      setSubmitted(false);
+                    }}
+                    className="inline-flex items-center justify-center rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90"
                   >
-                    <Mail className="h-4 w-4" />
                     Demander une visite
-                  </a>
-                  <a
-                    href={agent?.phoneHref ?? agencyConfig.contact.phoneHref}
-                    className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
-                  >
-                    <Phone className="h-4 w-4" />
-                    Appeler l’agence
-                  </a>
+                  </button>
+                  {phoneHref ? (
+                    <a
+                      href={phoneHref}
+                      className="inline-flex items-center justify-center gap-2 rounded-full border border-border bg-background px-5 py-3 text-sm font-medium transition hover:bg-secondary"
+                    >
+                      <Phone className="h-4 w-4" />
+                      Appeler l’agence
+                    </a>
+                  ) : (
+                    <div className="rounded-2xl border border-border bg-secondary/60 px-4 py-3 text-center text-sm text-muted-foreground">
+                      Téléphone indisponible
+                    </div>
+                  )}
                 </div>
               </div>
             </aside>
           </section>
         </div>
       </article>
+
+      {showVisitForm && (
+        <div className="fixed inset-0 z-[60] grid place-items-center overflow-y-auto bg-foreground/35 px-4 py-6 backdrop-blur-sm">
+          <div className="w-full max-w-2xl rounded-[1.75rem] bg-background p-6 shadow-2xl md:p-8">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h2 className="font-display text-4xl leading-tight">
+                  {submitted
+                    ? "Votre demande de visite a bien été transmise."
+                    : "Demander une visite"}
+                </h2>
+                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
+                  {submitted
+                    ? "Un conseiller vous rappellera rapidement pour échanger sur votre situation et organiser une visite si le bien correspond à votre projet."
+                    : "Laissez vos informations. Un conseiller vous rappelle pour confirmer votre situation et organiser une visite si le bien correspond à votre projet."}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowVisitForm(false)}
+                className="grid h-10 w-10 place-items-center rounded-full border border-border bg-card transition hover:bg-secondary"
+                aria-label="Fermer"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            {submitted ? (
+              <div className="mt-6 rounded-2xl border border-emerald-100 bg-emerald-50 p-5 text-emerald-800">
+                <CheckCircle2 className="h-5 w-5" />
+                <p className="mt-3 text-sm leading-relaxed">
+                  Aucune visite n’est confirmée automatiquement. Un conseiller
+                  vous rappelle pour valider votre situation et le créneau.
+                </p>
+              </div>
+            ) : (
+              <form
+                className="mt-6 grid gap-4 md:grid-cols-2"
+                onSubmit={onSubmitVisitRequest}
+              >
+                <Field label="Prénom">
+                  <Input
+                    value={form.firstName}
+                    onChange={(value) => setForm({ ...form, firstName: value })}
+                    required
+                  />
+                </Field>
+                <Field label="Nom">
+                  <Input
+                    value={form.lastName}
+                    onChange={(value) => setForm({ ...form, lastName: value })}
+                    required
+                  />
+                </Field>
+                <Field label="Téléphone">
+                  <Input
+                    type="tel"
+                    value={form.phone}
+                    onChange={(value) => setForm({ ...form, phone: value })}
+                    required
+                  />
+                </Field>
+                <Field label="Email">
+                  <Input
+                    type="email"
+                    value={form.email}
+                    onChange={(value) => setForm({ ...form, email: value })}
+                    required
+                  />
+                </Field>
+                <Field label="Situation acheteur">
+                  <Select
+                    value={form.buyerSituation}
+                    options={buyerSituations}
+                    onChange={(value) =>
+                      setForm({ ...form, buyerSituation: value })
+                    }
+                  />
+                </Field>
+                <Field label="Financement">
+                  <Select
+                    value={form.financingStatus}
+                    options={financingStatuses}
+                    onChange={(value) =>
+                      setForm({ ...form, financingStatus: value })
+                    }
+                  />
+                </Field>
+                <Field label="Délai d’achat" className="md:col-span-2">
+                  <Select
+                    value={form.buyingTimeline}
+                    options={buyingTimelines}
+                    onChange={(value) =>
+                      setForm({ ...form, buyingTimeline: value })
+                    }
+                  />
+                </Field>
+                <Field label="Message optionnel" className="md:col-span-2">
+                  <textarea
+                    value={form.message}
+                    onChange={(event) =>
+                      setForm({ ...form, message: event.target.value })
+                    }
+                    placeholder="Vos disponibilités, questions ou précisions…"
+                    className="min-h-28 w-full rounded-2xl border border-border bg-background px-4 py-3 text-sm outline-none transition focus:ring-2 focus:ring-ring"
+                  />
+                </Field>
+                <p className="text-sm leading-relaxed text-muted-foreground md:col-span-2">
+                  Aucune visite n’est confirmée automatiquement. Un conseiller
+                  vous rappelle pour valider votre situation et le créneau.
+                </p>
+                <div className="md:col-span-2">
+                  <button className="w-full rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground transition hover:bg-primary/90">
+                    Envoyer ma demande de visite
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+function Field({
+  label,
+  className = "",
+  children,
+}: {
+  label: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <label className={`space-y-2 ${className}`}>
+      <span className="text-xs font-medium text-foreground">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+function Input({
+  value,
+  onChange,
+  type = "text",
+  required,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
+  return (
+    <input
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      type={type}
+      required={required}
+      className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm outline-none transition focus:ring-2 focus:ring-ring"
+    />
+  );
+}
+
+function Select({
+  value,
+  options,
+  onChange,
+}: {
+  value: string;
+  options: string[];
+  onChange: (value: string) => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(event) => onChange(event.target.value)}
+      className="h-11 w-full rounded-full border border-border bg-background px-4 text-sm outline-none transition focus:ring-2 focus:ring-ring"
+    >
+      {options.map((option) => (
+        <option key={option} value={option}>
+          {option}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -229,12 +477,8 @@ function Spec({
   return (
     <div className="rounded-2xl border border-border bg-card p-4 shadow-sm">
       <Icon className="h-4 w-4 text-gold" />
-      <div className="mt-3 text-sm font-medium">{label}</div>
+      <div className="mt-3 text-sm font-medium">{label || "Non renseigné"}</div>
       <div className="mt-1 text-xs text-muted-foreground">{detail}</div>
     </div>
   );
-}
-
-function pluralize(count: number, label: string) {
-  return `${count} ${label}${count > 1 ? "s" : ""}`;
 }

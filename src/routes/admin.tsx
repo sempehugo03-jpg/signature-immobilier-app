@@ -11,6 +11,7 @@ import {
   Copy,
   Eye,
   ExternalLink,
+  Mail,
   Plus,
   Trash2,
 } from "lucide-react";
@@ -167,6 +168,7 @@ function AdminDashboard() {
   const [agencies, setAgencies] = useState<Agency[]>([]);
   const [feedback, setFeedback] = useState("");
   const [manualAccessLink, setManualAccessLink] = useState("");
+  const [manualAccessMailto, setManualAccessMailto] = useState("");
   const [manualAccessCopied, setManualAccessCopied] = useState(false);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [form, setForm] = useState({
@@ -219,6 +221,7 @@ function AdminDashboard() {
       !isValidEmail(form.managerEmail)
     ) {
       setManualAccessLink("");
+      setManualAccessMailto("");
       setManualAccessCopied(false);
       setFeedback("Email invalide.");
       return;
@@ -250,12 +253,14 @@ function AdminDashboard() {
     setShowCreateForm(false);
     if (result.sent) {
       setManualAccessLink("");
+      setManualAccessMailto("");
       setManualAccessCopied(false);
       setFeedback(
         "Agence créée en mode démo. Email d’invitation envoyé au patron.",
       );
     } else {
       setManualAccessLink(email.accessUrl ?? "");
+      setManualAccessMailto(email.mailtoHref);
       setManualAccessCopied(false);
       setFeedback(
         "Agence créée en mode démo. Invitation créée. Email non envoyé : configuration email manquante.",
@@ -266,6 +271,7 @@ function AdminDashboard() {
 
   async function onActivate(agency: Agency) {
     setManualAccessLink("");
+    setManualAccessMailto("");
     setManualAccessCopied(false);
     const managers = getManagers(agency.id).filter(
       (manager) => manager.status !== "disabled",
@@ -302,10 +308,12 @@ function AdminDashboard() {
     const sentCount = results.filter((result) => result.sent).length;
     if (sentCount) {
       setManualAccessLink("");
+      setManualAccessMailto("");
       setManualAccessCopied(false);
       setFeedback("Agence activée. Email envoyé au(x) patron(s).");
     } else {
       setManualAccessLink(emails[0]?.accessUrl ?? "");
+      setManualAccessMailto(emails[0]?.mailtoHref ?? "");
       setManualAccessCopied(false);
       setFeedback(
         "Agence activée. Email non envoyé : configuration email manquante.",
@@ -317,6 +325,7 @@ function AdminDashboard() {
   function onDisable(agency: Agency) {
     disableAgency(agency.id);
     setManualAccessLink("");
+    setManualAccessMailto("");
     setManualAccessCopied(false);
     setFeedback("Agence désactivée.");
     refresh();
@@ -332,6 +341,7 @@ function AdminDashboard() {
     }
     removeAgency(agency.id);
     setManualAccessLink("");
+    setManualAccessMailto("");
     setManualAccessCopied(false);
     setFeedback("Agence retirée.");
     refresh();
@@ -404,6 +414,18 @@ function AdminDashboard() {
                     <ExternalLink className="h-4 w-4" />
                     Ouvrir le lien
                   </Button>
+                  {manualAccessMailto && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="rounded-full bg-white"
+                    >
+                      <a href={manualAccessMailto}>
+                        <Mail className="h-4 w-4" />
+                        Préparer un email manuel
+                      </a>
+                    </Button>
+                  )}
                 </div>
                 {manualAccessCopied && (
                   <div className="mt-2 text-sm font-medium">Lien copié.</div>
@@ -455,6 +477,7 @@ function AdminDashboard() {
                   onInvalid={(event) => {
                     event.preventDefault();
                     setManualAccessLink("");
+                    setManualAccessMailto("");
                     setFeedback("Email invalide.");
                   }}
                   required
@@ -492,6 +515,7 @@ function AdminDashboard() {
                   onInvalid={(event) => {
                     event.preventDefault();
                     setManualAccessLink("");
+                    setManualAccessMailto("");
                     setFeedback("Email invalide.");
                   }}
                   required
