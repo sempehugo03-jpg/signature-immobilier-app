@@ -47,8 +47,6 @@ export function buildInviteEmailBody({
       "Créez votre accès ici :",
       accessUrl,
       "",
-      "Depuis votre espace, vous pourrez gérer votre agence, vos biens, vos agents, vos demandes d’estimation et les espaces vendeurs.",
-      "",
       "À bientôt,",
       "Signature Immobilier",
     ].join("\n");
