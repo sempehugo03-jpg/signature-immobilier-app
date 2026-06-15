@@ -1,9 +1,4 @@
 import {
-  completeInviteTokenRequest,
-  createInviteTokenRequest,
-  getInviteTokenRequest,
-} from "@/lib/api/invite-tokens.functions";
-import {
   activateInviteAccess,
   activeFeatures,
   buildAgentInviteEmail,
@@ -31,9 +26,31 @@ import {
 } from "@/lib/agency-saas";
 import {
   getEffectiveInviteStatus,
+  type CreateInviteTokenInput,
   type InviteTokenPersistence,
   type InviteTokenRecord,
+  type InviteTokenStatus,
 } from "@/lib/invite-tokens";
+
+type ApiReadInviteStatus = InviteTokenStatus | "invalid";
+
+type CreateInviteApiResponse = {
+  token: string;
+  inviteUrl: string;
+  record: InviteTokenRecord;
+};
+
+type ReadInviteApiResponse = {
+  status: ApiReadInviteStatus;
+  record?: InviteTokenRecord;
+};
+
+type CompleteInviteApiResponse = {
+  status: ApiReadInviteStatus;
+  destination?: string;
+  record?: InviteTokenRecord;
+  error?: string;
+};
 
 export type SharedInviteEmailResult = {
   email: EmailContent;
@@ -59,17 +76,15 @@ export async function createSharedTeamMemberInviteEmail(
   agency: Agency,
   member: TeamMember,
 ): Promise<SharedInviteEmailResult> {
-  const response = await createInviteTokenRequest({
-    data: {
-      type: member.role === "manager" ? "manager_invite" : "agent_invite",
-      agencyId: agency.id,
-      agencySlug: agency.slug,
-      teamMemberId: member.id,
-      email: member.email,
-    },
+  const response = await createInviteTokenViaApi({
+    type: member.role === "manager" ? "manager_invite" : "agent_invite",
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    teamMemberId: member.id,
+    email: member.email,
   });
 
-  if (response.ok) {
+  if (response) {
     const access = accessFromInviteRecord(response.record);
     return {
       email:
@@ -81,6 +96,7 @@ export async function createSharedTeamMemberInviteEmail(
     };
   }
 
+  ensureDevLocalFallbackAllowed();
   return {
     email: createTeamMemberInviteEmail(agency, member),
     persistedIn: "local",
@@ -103,18 +119,16 @@ export async function createSharedSellerInviteForProperty(
       sellerPhone: seller.phone.trim(),
     }).find((item) => item.id === property.id) ?? property;
 
-  const response = await createInviteTokenRequest({
-    data: {
-      type: "seller_invite",
-      agencyId: agency.id,
-      agencySlug: agency.slug,
-      propertyId: updatedProperty.id,
-      sellerToken,
-      email: seller.email,
-    },
+  const response = await createInviteTokenViaApi({
+    type: "seller_invite",
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    propertyId: updatedProperty.id,
+    sellerToken,
+    email: seller.email,
   });
 
-  if (response.ok) {
+  if (response) {
     return {
       property: updatedProperty,
       email: buildSellerInviteEmail(
@@ -128,6 +142,7 @@ export async function createSharedSellerInviteForProperty(
     };
   }
 
+  ensureDevLocalFallbackAllowed();
   const localResult = createSellerInviteForProperty(agency, updatedProperty, {
     ...seller,
     email: seller.email.trim().toLowerCase(),
@@ -142,8 +157,8 @@ export async function createSharedSellerInviteForProperty(
 export async function loadInviteAccess(
   token: string,
 ): Promise<LoadedInviteAccess> {
-  const response = await getInviteTokenRequest({ data: { token } });
-  if (response.ok) {
+  const response = await getInviteTokenViaApi(token);
+  if (response) {
     return {
       lookup: lookupFromSharedInviteResponse(response.status, response.record),
       persistedIn: "supabase",
@@ -151,6 +166,7 @@ export async function loadInviteAccess(
     };
   }
 
+  ensureDevLocalFallbackAllowed();
   return {
     lookup: getInviteAccessByToken(token),
     persistedIn: "local",
@@ -167,20 +183,19 @@ export async function completeLoadedInviteAccess({
   loaded: LoadedInviteAccess;
 }): Promise<CompletedInviteAccessLookup> {
   if (loaded.persistedIn === "local" || !loaded.sharedRecord) {
+    ensureDevLocalFallbackAllowed();
     return activateInviteAccess(token, password);
   }
 
-  const response = await completeInviteTokenRequest({
-    data: {
-      token,
-      password,
-    },
+  const response = await completeInviteTokenViaApi({
+    token,
+    password,
   });
 
-  if (!response.ok) {
+  if (!response || !response.record || !response.destination) {
     return lookupFromSharedInviteResponse(
-      response.status ?? "invalid",
-      response.record ?? loaded.sharedRecord,
+      response?.status ?? "invalid",
+      response?.record ?? loaded.sharedRecord,
     );
   }
 
@@ -206,14 +221,14 @@ export function getSharedInviteStorageWarning(
   persistedIn: InviteTokenPersistence,
 ) {
   if (persistedIn !== "local" || !import.meta.env.DEV) return "";
-  return " Attention : ce lien fonctionne uniquement dans ce navigateur car la base partagée n’est pas configurée.";
+  return " Base partagée non configurée : ce lien ne fonctionnera que dans ce navigateur.";
 }
 
 function lookupFromSharedInviteResponse(
-  status: "pending" | "used" | "expired" | "invalid",
+  status: ApiReadInviteStatus,
   record?: InviteTokenRecord,
 ): InviteAccessLookup {
-  if (!record || status === "invalid") {
+  if (!record || status === "invalid" || status === "revoked") {
     return invalidLookup("invalid", record);
   }
 
@@ -285,6 +300,67 @@ function accessFromInviteRecord(record: InviteTokenRecord): AccessToken {
     usedAt: record.usedAt,
     expiresAt: record.expiresAt,
   };
+}
+
+async function createInviteTokenViaApi(
+  data: CreateInviteTokenInput,
+): Promise<CreateInviteApiResponse | null> {
+  try {
+    const response = await fetch("/api/invites/create", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+
+    if (!response.ok) return null;
+    return (await response.json()) as CreateInviteApiResponse;
+  } catch (error) {
+    console.warn("Invitation API non créée", error);
+    return null;
+  }
+}
+
+async function getInviteTokenViaApi(
+  token: string,
+): Promise<ReadInviteApiResponse | null> {
+  try {
+    const response = await fetch(`/api/invites/${encodeURIComponent(token)}`);
+
+    if (response.status === 404) {
+      return { status: "invalid" };
+    }
+    if (!response.ok) return null;
+    return (await response.json()) as ReadInviteApiResponse;
+  } catch (error) {
+    console.warn("Invitation API non lue", error);
+    return null;
+  }
+}
+
+async function completeInviteTokenViaApi({
+  token,
+  password,
+}: {
+  token: string;
+  password: string;
+}): Promise<CompleteInviteApiResponse | null> {
+  try {
+    const response = await fetch("/api/invites/complete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ token, password }),
+    });
+    const body = (await response.json()) as CompleteInviteApiResponse;
+    return body;
+  } catch (error) {
+    console.warn("Invitation API non validée", error);
+    return null;
+  }
+}
+
+function ensureDevLocalFallbackAllowed() {
+  if (import.meta.env.DEV) return;
+  throw new Error("SHARED_INVITE_STORE_REQUIRED");
 }
 
 function getInviteAgency(record: InviteTokenRecord): Agency {

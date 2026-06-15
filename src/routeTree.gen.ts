@@ -37,6 +37,9 @@ import { Route as DemoAgenceSlugVendeurRouteImport } from './routes/demo-agence.
 import { Route as DemoAgenceSlugPatronRouteImport } from './routes/demo-agence.$slug.patron'
 import { Route as DemoAgenceSlugEstimationRouteImport } from './routes/demo-agence.$slug.estimation'
 import { Route as DemoAgenceSlugAgentRouteImport } from './routes/demo-agence.$slug.agent'
+import { Route as ApiInvitesCreateRouteImport } from './routes/api/invites/create'
+import { Route as ApiInvitesCompleteRouteImport } from './routes/api/invites/complete'
+import { Route as ApiInvitesTokenRouteImport } from './routes/api/invites/$token'
 import { Route as AgentPropertiesIdRouteImport } from './routes/agent.properties.$id'
 import { Route as AgenceSlugSettingsRouteImport } from './routes/agence.$slug.settings'
 import { Route as AgenceSlugEstimationsRouteImport } from './routes/agence.$slug.estimations'
@@ -190,6 +193,21 @@ const DemoAgenceSlugAgentRoute = DemoAgenceSlugAgentRouteImport.update({
   path: '/agent',
   getParentRoute: () => DemoAgenceSlugRoute,
 } as any)
+const ApiInvitesCreateRoute = ApiInvitesCreateRouteImport.update({
+  id: '/api/invites/create',
+  path: '/api/invites/create',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInvitesCompleteRoute = ApiInvitesCompleteRouteImport.update({
+  id: '/api/invites/complete',
+  path: '/api/invites/complete',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiInvitesTokenRoute = ApiInvitesTokenRouteImport.update({
+  id: '/api/invites/$token',
+  path: '/api/invites/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentPropertiesIdRoute = AgentPropertiesIdRouteImport.update({
   id: '/properties/$id',
   path: '/properties/$id',
@@ -283,6 +301,9 @@ export interface FileRoutesByFullPath {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/invites/$token': typeof ApiInvitesTokenRoute
+  '/api/invites/complete': typeof ApiInvitesCompleteRoute
+  '/api/invites/create': typeof ApiInvitesCreateRoute
   '/demo-agence/$slug/agent': typeof DemoAgenceSlugAgentRoute
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
@@ -324,6 +345,9 @@ export interface FileRoutesByTo {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/invites/$token': typeof ApiInvitesTokenRoute
+  '/api/invites/complete': typeof ApiInvitesCompleteRoute
+  '/api/invites/create': typeof ApiInvitesCreateRoute
   '/demo-agence/$slug/agent': typeof DemoAgenceSlugAgentRoute
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
@@ -366,6 +390,9 @@ export interface FileRoutesById {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/invites/$token': typeof ApiInvitesTokenRoute
+  '/api/invites/complete': typeof ApiInvitesCompleteRoute
+  '/api/invites/create': typeof ApiInvitesCreateRoute
   '/demo-agence/$slug/agent': typeof DemoAgenceSlugAgentRoute
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
@@ -409,6 +436,9 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/invites/$token'
+    | '/api/invites/complete'
+    | '/api/invites/create'
     | '/demo-agence/$slug/agent'
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
@@ -450,6 +480,9 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/invites/$token'
+    | '/api/invites/complete'
+    | '/api/invites/create'
     | '/demo-agence/$slug/agent'
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
@@ -491,6 +524,9 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/invites/$token'
+    | '/api/invites/complete'
+    | '/api/invites/create'
     | '/demo-agence/$slug/agent'
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
@@ -526,6 +562,9 @@ export interface RootRouteChildren {
   DemoAgenceSlugRoute: typeof DemoAgenceSlugRouteWithChildren
   AgenceIndexRoute: typeof AgenceIndexRoute
   AccesAgenceTokenRoute: typeof AccesAgenceTokenRoute
+  ApiInvitesTokenRoute: typeof ApiInvitesTokenRoute
+  ApiInvitesCompleteRoute: typeof ApiInvitesCompleteRoute
+  ApiInvitesCreateRoute: typeof ApiInvitesCreateRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -726,6 +765,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DemoAgenceSlugAgentRouteImport
       parentRoute: typeof DemoAgenceSlugRoute
     }
+    '/api/invites/create': {
+      id: '/api/invites/create'
+      path: '/api/invites/create'
+      fullPath: '/api/invites/create'
+      preLoaderRoute: typeof ApiInvitesCreateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/invites/complete': {
+      id: '/api/invites/complete'
+      path: '/api/invites/complete'
+      fullPath: '/api/invites/complete'
+      preLoaderRoute: typeof ApiInvitesCompleteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/invites/$token': {
+      id: '/api/invites/$token'
+      path: '/api/invites/$token'
+      fullPath: '/api/invites/$token'
+      preLoaderRoute: typeof ApiInvitesTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent/properties/$id': {
       id: '/agent/properties/$id'
       path: '/properties/$id'
@@ -897,6 +957,9 @@ const rootRouteChildren: RootRouteChildren = {
   DemoAgenceSlugRoute: DemoAgenceSlugRouteWithChildren,
   AgenceIndexRoute: AgenceIndexRoute,
   AccesAgenceTokenRoute: AccesAgenceTokenRoute,
+  ApiInvitesTokenRoute: ApiInvitesTokenRoute,
+  ApiInvitesCompleteRoute: ApiInvitesCompleteRoute,
+  ApiInvitesCreateRoute: ApiInvitesCreateRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

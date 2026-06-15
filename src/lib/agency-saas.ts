@@ -135,7 +135,7 @@ export type AccessToken = {
   sellerId?: string;
   sellerToken?: string;
   email?: string;
-  status?: "pending" | "used" | "expired";
+  status?: "pending" | "used" | "expired" | "revoked";
   createdAt: string;
   usedAt?: string;
   expiresAt?: string;
@@ -1305,6 +1305,10 @@ export function getInviteAccessByToken(tokenValue: string): InviteAccessLookup {
     return invalidInviteResult("used", access);
   }
 
+  if (access.status === "revoked") {
+    return invalidInviteResult("invalid", access);
+  }
+
   if (
     access.status === "expired" ||
     (access.expiresAt && new Date(access.expiresAt).getTime() < Date.now())
@@ -2161,7 +2165,9 @@ function coerceAccessToken(access: unknown): AccessToken {
     sellerToken: optionalString(source.sellerToken),
     email: optionalString(cleanEmail(safeString(source.email))),
     status:
-      source.status === "used" || source.status === "expired"
+      source.status === "used" ||
+      source.status === "expired" ||
+      source.status === "revoked"
         ? source.status
         : source.status === "pending"
           ? "pending"

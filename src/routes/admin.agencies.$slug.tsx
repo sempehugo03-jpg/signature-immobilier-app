@@ -136,11 +136,22 @@ function AdminAgencyRoute() {
     const updated = activateAgency(agency.id);
     if (!updated) return;
 
-    const invites = await Promise.all(
-      managers.map((manager) =>
-        createSharedTeamMemberInviteEmail(updated, manager),
-      ),
-    );
+    let invites;
+    try {
+      invites = await Promise.all(
+        managers.map((manager) =>
+          createSharedTeamMemberInviteEmail(updated, manager),
+        ),
+      );
+    } catch (error) {
+      console.info("Invitations patron non préparées", error);
+      setAgency(updated);
+      setEmailPreviews([]);
+      setFeedback(
+        "Agence activée. Invitations non préparées : base partagée non configurée.",
+      );
+      return;
+    }
     const emails = invites.map((invite) => invite.email);
     const storageWarning = getSharedInviteStorageWarning(
       invites.some((invite) => invite.persistedIn === "local")

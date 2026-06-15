@@ -1,6 +1,6 @@
 import type { InviteAccessType } from "@/lib/invite-email";
 
-export type InviteTokenStatus = "pending" | "used" | "expired";
+export type InviteTokenStatus = "pending" | "used" | "expired" | "revoked";
 export type InviteTokenPersistence = "supabase" | "local";
 
 export type InviteTokenRecord = {
