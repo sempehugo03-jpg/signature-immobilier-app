@@ -39,7 +39,6 @@ import {
   addTeamMember,
   consumeStorageResetNotice,
   createAgency,
-  createTeamMemberInviteEmail,
   disableAgency,
   generateAgencySlug,
   getAgents,
@@ -51,6 +50,10 @@ import {
   type TeamMember,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  createSharedTeamMemberInviteEmail,
+  getSharedInviteStorageWarning,
+} from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -243,11 +246,12 @@ function AdminDashboard() {
       role: "manager",
       status: "invited",
     });
-    const email = createTeamMemberInviteEmail(agency, manager);
+    const invite = await createSharedTeamMemberInviteEmail(agency, manager);
+    const storageWarning = getSharedInviteStorageWarning(invite.persistedIn);
     const result = await sendTeamInviteEmail(
       agency.name,
       manager,
-      email.accessUrl,
+      invite.email.accessUrl,
     );
     resetCreateForm();
     setShowCreateForm(false);
@@ -256,14 +260,14 @@ function AdminDashboard() {
       setManualAccessMailto("");
       setManualAccessCopied(false);
       setFeedback(
-        "Agence créée en mode démo. Email d’invitation envoyé au patron.",
+        `Agence créée en mode démo. Email d’invitation envoyé au patron.${storageWarning}`,
       );
     } else {
-      setManualAccessLink(email.accessUrl ?? "");
-      setManualAccessMailto(email.mailtoHref);
+      setManualAccessLink(invite.email.accessUrl ?? "");
+      setManualAccessMailto(invite.email.mailtoHref);
       setManualAccessCopied(false);
       setFeedback(
-        "Agence créée en mode démo. Invitation créée. Email non envoyé : configuration email manquante.",
+        `Agence créée en mode démo. Invitation créée. Email non envoyé : configuration email manquante.${storageWarning}`,
       );
     }
     refresh();
@@ -296,8 +300,16 @@ function AdminDashboard() {
 
     const updated = activateAgency(agency.id);
     if (!updated) return;
-    const emails = managers.map((manager) =>
-      createTeamMemberInviteEmail(updated, manager),
+    const invites = await Promise.all(
+      managers.map((manager) =>
+        createSharedTeamMemberInviteEmail(updated, manager),
+      ),
+    );
+    const emails = invites.map((invite) => invite.email);
+    const storageWarning = getSharedInviteStorageWarning(
+      invites.some((invite) => invite.persistedIn === "local")
+        ? "local"
+        : "supabase",
     );
     const results = await Promise.all(
       managers.map((manager, index) =>
@@ -310,13 +322,15 @@ function AdminDashboard() {
       setManualAccessLink("");
       setManualAccessMailto("");
       setManualAccessCopied(false);
-      setFeedback("Agence activée. Email envoyé au(x) patron(s).");
+      setFeedback(
+        `Agence activée. Email envoyé au(x) patron(s).${storageWarning}`,
+      );
     } else {
       setManualAccessLink(emails[0]?.accessUrl ?? "");
       setManualAccessMailto(emails[0]?.mailtoHref ?? "");
       setManualAccessCopied(false);
       setFeedback(
-        "Agence activée. Email non envoyé : configuration email manquante.",
+        `Agence activée. Email non envoyé : configuration email manquante.${storageWarning}`,
       );
     }
     refresh();
@@ -422,7 +436,7 @@ function AdminDashboard() {
                     >
                       <a href={manualAccessMailto}>
                         <Mail className="h-4 w-4" />
-                        Préparer un email manuel
+                        Ouvrir l’application mail
                       </a>
                     </Button>
                   )}

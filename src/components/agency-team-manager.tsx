@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
   addTeamMember,
-  createTeamMemberInviteEmail,
   deleteTeamMember,
   disableTeamMember,
   enableTeamMember,
@@ -33,6 +32,11 @@ import {
   openGmailCompose,
   openMailApp,
 } from "@/lib/invite-email";
+import {
+  createSharedTeamMemberInviteEmail,
+  getSharedInviteStorageWarning,
+  type SharedInviteEmailResult,
+} from "@/lib/shared-invites";
 
 type MemberFormData = Pick<
   TeamMember,
@@ -44,11 +48,11 @@ type SendInviteResult = {
   reason?: string | null;
 };
 
-type PreparedInvite = ReturnType<typeof createTeamMemberInviteEmail>;
+type PreparedInvite = SharedInviteEmailResult;
 
 const INVITE_EMAIL_TIMEOUT_MS = 8000;
 const MANAGER_INVITE_READY_FEEDBACK =
-  "Invitation prête. Choisissez comment envoyer le lien au patron.";
+  "Invitation prête. Le lien peut être envoyé au destinataire.";
 
 export function AgencyTeamManager({
   agencyId,
@@ -142,7 +146,7 @@ export function AgencyTeamManager({
 
     let email: PreparedInvite;
     try {
-      email = createTeamMemberInviteEmail(agency, member);
+      email = await createSharedTeamMemberInviteEmail(agency, member);
     } catch (error) {
       console.info("Lien d’invitation non préparé", error);
       setManualInviteLink("");
@@ -155,7 +159,8 @@ export function AgencyTeamManager({
       return false;
     }
 
-    const inviteUrl = email.accessUrl ?? "";
+    const inviteUrl = email.email.accessUrl ?? "";
+    const storageWarning = getSharedInviteStorageWarning(email.persistedIn);
     if (!inviteUrl) {
       setManualInviteLink("");
       setManualInviteGmail("");
@@ -201,7 +206,7 @@ export function AgencyTeamManager({
           ...emailContent,
         }),
       );
-      setFeedback(MANAGER_INVITE_READY_FEEDBACK);
+      setFeedback(`${MANAGER_INVITE_READY_FEEDBACK}${storageWarning}`);
       logInviteDebug("invite_email_result", {
         memberId: member.id,
         role: member.role,
@@ -230,14 +235,16 @@ export function AgencyTeamManager({
       setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
-      setFeedback(`${successPrefix}. Email d’invitation envoyé.`);
+      setFeedback(
+        `${successPrefix}. Email d’invitation envoyé.${storageWarning}`,
+      );
       return true;
     }
 
     setManualInviteGmail("");
-    setManualInviteMailto(email.mailtoHref);
+    setManualInviteMailto(email.email.mailtoHref);
     setManualInviteCopied(false);
-    setFeedback(getInviteFallbackFeedback(successPrefix));
+    setFeedback(`${getInviteFallbackFeedback(successPrefix)}${storageWarning}`);
     return true;
   }
 

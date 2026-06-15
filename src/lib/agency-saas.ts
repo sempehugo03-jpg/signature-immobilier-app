@@ -129,11 +129,13 @@ export type AccessToken = {
   token: string;
   type: AccessTokenType;
   agencyId: string;
+  agencySlug?: string;
   propertyId?: string;
   teamMemberId?: string;
   sellerId?: string;
   sellerToken?: string;
   email?: string;
+  status?: "pending" | "used" | "expired";
   createdAt: string;
   usedAt?: string;
   expiresAt?: string;
@@ -962,6 +964,7 @@ export function createSellerInviteForProperty(
   const access = createInviteAccessToken({
     type: "seller_invite",
     agencyId: agency.id,
+    agencySlug: agency.slug,
     propertyId: updatedProperty.id,
     sellerToken,
     email: seller.email,
@@ -1151,7 +1154,12 @@ export function createAccessToken(
     Partial<
       Pick<
         AccessToken,
-        "propertyId" | "teamMemberId" | "sellerId" | "sellerToken" | "email"
+        | "agencySlug"
+        | "propertyId"
+        | "teamMemberId"
+        | "sellerId"
+        | "sellerToken"
+        | "email"
       >
     >,
 ) {
@@ -1161,6 +1169,7 @@ export function createAccessToken(
     token: encodeAccessToken({
       type: data.type,
       agencyId: data.agencyId,
+      agencySlug: data.agencySlug,
       propertyId: data.propertyId,
       teamMemberId: data.teamMemberId,
       createdAt,
@@ -1168,6 +1177,7 @@ export function createAccessToken(
     }),
     type: data.type,
     agencyId: data.agencyId,
+    agencySlug: data.agencySlug,
     propertyId: data.propertyId,
     teamMemberId: data.teamMemberId,
     sellerId: data.sellerId,
@@ -1196,7 +1206,12 @@ export function createInviteAccessToken(
     Partial<
       Pick<
         AccessToken,
-        "propertyId" | "teamMemberId" | "sellerId" | "sellerToken" | "expiresAt"
+        | "agencySlug"
+        | "propertyId"
+        | "teamMemberId"
+        | "sellerId"
+        | "sellerToken"
+        | "expiresAt"
       >
     >,
 ) {
@@ -1210,11 +1225,13 @@ export function createInviteAccessToken(
     token: generateAccessTokenValue(),
     type: data.type,
     agencyId: data.agencyId,
+    agencySlug: data.agencySlug,
     propertyId: data.propertyId,
     teamMemberId: data.teamMemberId,
     sellerId: data.sellerId,
     sellerToken: data.sellerToken,
     email: cleanEmail(data.email ?? ""),
+    status: "pending",
     createdAt,
     expiresAt: data.expiresAt,
   };
@@ -1268,6 +1285,7 @@ export function createTeamMemberInviteEmail(
   const access = createInviteAccessToken({
     type: member.role === "manager" ? "manager_invite" : "agent_invite",
     agencyId: agency.id,
+    agencySlug: agency.slug,
     teamMemberId: member.id,
     email: member.email,
   });
@@ -1283,11 +1301,14 @@ export function getInviteAccessByToken(tokenValue: string): InviteAccessLookup {
     return invalidInviteResult();
   }
 
-  if (access.usedAt) {
+  if (access.status === "used" || access.usedAt) {
     return invalidInviteResult("used", access);
   }
 
-  if (access.expiresAt && new Date(access.expiresAt).getTime() < Date.now()) {
+  if (
+    access.status === "expired" ||
+    (access.expiresAt && new Date(access.expiresAt).getTime() < Date.now())
+  ) {
     return invalidInviteResult("expired", access);
   }
 
@@ -1593,6 +1614,7 @@ export function buildManagerInviteEmail(
   access = createInviteAccessToken({
     type: "manager_invite",
     agencyId: agency.id,
+    agencySlug: agency.slug,
     teamMemberId: manager.id,
     email: manager.email,
   }),
@@ -1612,6 +1634,7 @@ export function buildAgentInviteEmail(
   access = createInviteAccessToken({
     type: "agent_invite",
     agencyId: agency.id,
+    agencySlug: agency.slug,
     teamMemberId: agent.id,
     email: agent.email,
   }),
@@ -1632,6 +1655,7 @@ export function buildSellerInviteEmail(
   access = createInviteAccessToken({
     type: "seller_invite",
     agencyId: agency.id,
+    agencySlug: agency.slug,
     propertyId: property.id,
     sellerToken: property.sellerToken,
     email: seller.email,
@@ -2130,11 +2154,18 @@ function coerceAccessToken(access: unknown): AccessToken {
     token: safeString(source.token),
     type: isAccessTokenType(source.type) ? source.type : "seller",
     agencyId: safeString(source.agencyId),
+    agencySlug: optionalString(source.agencySlug),
     propertyId: optionalString(source.propertyId),
     teamMemberId: optionalString(source.teamMemberId),
     sellerId: optionalString(source.sellerId),
     sellerToken: optionalString(source.sellerToken),
     email: optionalString(cleanEmail(safeString(source.email))),
+    status:
+      source.status === "used" || source.status === "expired"
+        ? source.status
+        : source.status === "pending"
+          ? "pending"
+          : undefined,
     createdAt,
     usedAt: optionalString(source.usedAt),
     expiresAt: optionalString(source.expiresAt),
@@ -2375,11 +2406,28 @@ function invalidInviteResult(
   access?: AccessToken | null,
   agency?: Agency | null,
 ): InviteAccessLookup {
+  const labels = {
+    invalid: {
+      title: "Lien invalide ou expiré",
+      message:
+        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    },
+    used: {
+      title: "Ce lien a déjà été utilisé",
+      message:
+        "Connectez-vous à votre espace ou contactez votre agence si vous avez besoin d’un nouvel accès.",
+    },
+    expired: {
+      title: "Ce lien a expiré",
+      message:
+        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    },
+  };
+
   return {
     status,
-    title: "Lien invalide ou expiré",
-    message:
-      "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    title: labels[status].title,
+    message: labels[status].message,
     access,
     agency,
   };
@@ -2458,6 +2506,7 @@ function decodeAccessToken(token: string): AccessToken | null {
       token,
       type: payload.type,
       agencyId: payload.agencyId,
+      agencySlug: payload.agencySlug,
       propertyId: payload.propertyId,
       teamMemberId: payload.teamMemberId,
       sellerId: payload.sellerId,
