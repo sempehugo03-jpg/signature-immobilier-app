@@ -12,7 +12,75 @@ export type AgencyPlan = "demo" | "pilot";
 export type TeamRole = "manager" | "agent";
 export type TeamMemberStatus = "invited" | "active" | "disabled";
 export type AccessTokenType = "manager" | "agent" | "seller" | InviteAccessType;
-export type AgencyLeadStatus = "Nouveau" | "Rappelé" | "Converti" | "Perdu";
+export type LeadStatus = "new" | "contacted" | "archived";
+export type AgencyLeadStatus = LeadStatus;
+export type PropertyPublicStatus =
+  | "none"
+  | "new"
+  | "exclusive"
+  | "favorite"
+  | "Disponible"
+  | "Nouveauté"
+  | "Exclusivité"
+  | "Sous offre"
+  | "Vendu"
+  | "Coup de cœur";
+export type PropertyInternalProgress =
+  | "mandate_signed"
+  | "published"
+  | "visits"
+  | "offer_received"
+  | "compromise_signed"
+  | "sold";
+export type VisitStatus = "planned" | "done" | "cancelled";
+export type DocumentType =
+  | "Mandat"
+  | "Diagnostics"
+  | "Offre"
+  | "Compromis"
+  | "Autre";
+
+export type PropertyPhoto = {
+  id: string;
+  propertyId: string;
+  url: string;
+  alt: string;
+  isMain: boolean;
+  order: number;
+  createdAt: string;
+};
+
+export type Visit = {
+  id: string;
+  propertyId: string;
+  date: string;
+  time: string;
+  visitorName: string;
+  visitorPhone: string;
+  note: string;
+  status: VisitStatus;
+  createdAt: string;
+};
+
+export type VisitReport = {
+  id: string;
+  propertyId: string;
+  visitId?: string;
+  title: string;
+  content: string;
+  visibleToSeller: boolean;
+  createdAt: string;
+};
+
+export type PropertyDocument = {
+  id: string;
+  propertyId: string;
+  name: string;
+  type: DocumentType;
+  url: string;
+  visibleToSeller: boolean;
+  createdAt: string;
+};
 
 export type AgencyFeatures = {
   canCreateProperties: boolean;
@@ -75,32 +143,38 @@ export type AccessToken = {
 export type AgencyProperty = {
   id: string;
   agencyId: string;
+  agencySlug: string;
+  slug: string;
   title: string;
   type: string;
   city: string;
   address: string;
+  addressOrDistrict: string;
   price: string;
   surface: string;
   rooms: string;
   bedrooms: string;
-  publicStatus:
-    | "Disponible"
-    | "Nouveauté"
-    | "Exclusivité"
-    | "Sous offre"
-    | "Vendu"
-    | "Coup de cœur";
+  publicStatus: PropertyPublicStatus;
+  internalProgress: PropertyInternalProgress;
   internalStatus: string;
+  isPublished: boolean;
   nextVisit: string;
   report: string;
   description: string;
   image: string;
+  imageUrl: string;
+  photos: PropertyPhoto[];
   sellerToken: string;
   sellerFirstName: string;
   sellerLastName: string;
   sellerEmail: string;
   sellerPhone: string;
   documents: string[];
+  propertyDocuments: PropertyDocument[];
+  visits: Visit[];
+  visitReports: VisitReport[];
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type SellerInviteInput = {
@@ -130,12 +204,14 @@ export type InviteAccessLookup =
 
 export type AgencyLead = {
   id: string;
+  agencyId?: string;
   agencySlug: string;
   agencyName: string;
   firstName: string;
   lastName: string;
   phone: string;
   email: string;
+  propertyAddress?: string;
   propertyType: string;
   propertyCity: string;
   surface: string;
@@ -146,9 +222,35 @@ export type AgencyLead = {
   sellingDelay: string;
   estimateLow?: string;
   estimateHigh?: string;
+  estimatedRangeMin?: string;
+  estimatedRangeMax?: string;
+  message?: string;
+  assignedAgentId?: string;
   answers?: string;
   status: AgencyLeadStatus;
   createdAt: string;
+  updatedAt: string;
+};
+
+export type VisitRequest = {
+  id: string;
+  agencyId: string;
+  agencySlug: string;
+  propertyId: string;
+  propertyTitle: string;
+  propertyCity: string;
+  propertyPrice: string;
+  firstName: string;
+  lastName: string;
+  phone: string;
+  email: string;
+  buyerSituation: string;
+  financingStatus: string;
+  buyingTimeline: string;
+  message: string;
+  status: LeadStatus;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type AgencyLinks = {
@@ -177,7 +279,9 @@ const AGENCIES_KEY = "signature_saas_agencies";
 const REMOVED_AGENCIES_KEY = "signature_saas_removed_agencies";
 const TEAM_KEY = "signature_saas_team_members";
 const PROPERTIES_KEY = "signature_saas_properties";
-const LEADS_KEY = "signature_saas_leads";
+export const ESTIMATION_LEADS_KEY = "signature_estimation_leads";
+const LEGACY_LEADS_KEY = "signature_saas_leads";
+export const VISIT_REQUESTS_KEY = "signature_visit_requests";
 export const ACCESS_TOKENS_KEY = "signature_access_tokens";
 const LEGACY_TOKENS_KEY = "signature_saas_access_tokens";
 const ACCESS_SESSION_KEY = "signature_saas_current_access";
@@ -231,12 +335,45 @@ export function getAgencies() {
   return mergeAgencies(readStored<unknown[]>(AGENCIES_KEY, []));
 }
 
+export function getPrimaryPublicAgency() {
+  const agencies = getAgencies();
+  return (
+    agencies.find(
+      (agency) => agency.status === "active" && agency.publicEnabled,
+    ) ??
+    agencies.find((agency) => agency.publicEnabled) ??
+    agencies[0] ??
+    null
+  );
+}
+
 export function getAgencyBySlug(slug: string) {
   return getAgencies().find((agency) => agency.slug === slug) ?? null;
 }
 
 export function getAgencyById(id: string) {
   return getAgencies().find((agency) => agency.id === id) ?? null;
+}
+
+export function getAgencyNotificationRecipients(
+  agency: Agency,
+  _property?: AgencyProperty | null,
+) {
+  const recipients = [
+    agency.estimationEmail,
+    agency.email,
+    ...getManagers(agency.id)
+      .filter((manager) => manager.status === "active")
+      .map((manager) => manager.email),
+    ...getAgents(agency.id)
+      .filter((agent) => agent.status === "active")
+      .map((agent) => agent.email),
+  ]
+    .filter((email): email is string => Boolean(email))
+    .map(cleanEmail)
+    .filter(isValidEmail);
+
+  return Array.from(new Set(recipients));
 }
 
 export function createAgency(data: Partial<Agency>) {
@@ -343,11 +480,11 @@ export function removeAgency(id: string) {
   );
   deleteAccessTokensForAgency(id);
   if (agency) {
-    writeStored(
-      LEADS_KEY,
-      readStored<Partial<AgencyLead>[]>(LEADS_KEY, [])
-        .map(coerceLead)
-        .filter((lead) => lead.agencySlug !== agency.slug),
+    saveEstimationLeads(
+      getEstimationLeads().filter((lead) => lead.agencySlug !== agency.slug),
+    );
+    saveVisitRequests(
+      getVisitRequests().filter((request) => request.agencyId !== agency.id),
     );
   }
   return true;
@@ -512,12 +649,54 @@ export function getAgencyProperties(agency: Agency) {
 export function getAgencyProperty(agency: Agency, propertyId: string) {
   return (
     getAgencyProperties(agency).find(
-      (property) => property.id === propertyId,
+      (property) => property.id === propertyId || property.slug === propertyId,
     ) ?? null
   );
 }
 
-export function saveAgencyProperty(property: AgencyProperty) {
+export function getAllStoredProperties() {
+  return readStored<Partial<AgencyProperty>[]>(PROPERTIES_KEY, []).map(
+    coerceProperty,
+  );
+}
+
+export function getPublicProperties() {
+  const activeAgencies = getAgencies().filter(
+    (agency) => agency.status === "active" && agency.publicEnabled,
+  );
+  const activeAgencyIds = new Set(activeAgencies.map((agency) => agency.id));
+  const storedPublished = getAllStoredProperties().filter(
+    (property) =>
+      activeAgencyIds.has(property.agencyId) && property.isPublished,
+  );
+
+  if (storedPublished.length) {
+    return storedPublished.sort((a, b) =>
+      b.updatedAt.localeCompare(a.updatedAt),
+    );
+  }
+
+  const fallbackAgency =
+    activeAgencies[0] ?? getAgencies().find((agency) => agency.publicEnabled);
+  return fallbackAgency ? createDemoProperties(fallbackAgency) : [];
+}
+
+export function getPublicProperty(propertyIdOrSlug: string) {
+  return (
+    getPublicProperties().find(
+      (property) =>
+        property.id === propertyIdOrSlug || property.slug === propertyIdOrSlug,
+    ) ?? null
+  );
+}
+
+export function getPublicPropertyUrl(property: AgencyProperty) {
+  return `/biens/${encodeURIComponent(property.slug || property.id)}`;
+}
+
+export function saveAgencyProperty(
+  property: Partial<AgencyProperty> & Pick<AgencyProperty, "id" | "agencyId">,
+) {
   const nextProperty = coerceProperty(property);
   const properties = readStored<AgencyProperty[]>(PROPERTIES_KEY, []).map(
     coerceProperty,
@@ -530,6 +709,200 @@ export function saveAgencyProperty(property: AgencyProperty) {
   return nextProperties.filter(
     (item) => item.agencyId === nextProperty.agencyId,
   );
+}
+
+export function updateAgencyProperty(
+  property: AgencyProperty,
+  patch: Partial<AgencyProperty>,
+) {
+  const updated = saveAgencyProperty({
+    ...property,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  }).find((item) => item.id === property.id);
+  return updated ?? coerceProperty({ ...property, ...patch });
+}
+
+export function addPropertyPhoto(
+  property: AgencyProperty,
+  data: Pick<PropertyPhoto, "url" | "alt"> &
+    Partial<Pick<PropertyPhoto, "isMain">>,
+) {
+  const now = new Date().toISOString();
+  const photo: PropertyPhoto = {
+    id: `photo-${Date.now()}-${randomId()}`,
+    propertyId: property.id,
+    url: data.url.trim(),
+    alt: data.alt.trim() || property.title,
+    isMain: Boolean(data.isMain) || property.photos.length === 0,
+    order: property.photos.length + 1,
+    createdAt: now,
+  };
+  const nextPhotos = [
+    ...property.photos.map((item) =>
+      photo.isMain ? { ...item, isMain: false } : item,
+    ),
+    photo,
+  ];
+  return updateAgencyProperty(property, {
+    photos: nextPhotos,
+    imageUrl: photo.isMain ? photo.url : property.imageUrl,
+    image: photo.isMain ? photo.url : property.image,
+  });
+}
+
+export function setMainPropertyPhoto(
+  property: AgencyProperty,
+  photoId: string,
+) {
+  const nextPhotos = property.photos.map((photo) => ({
+    ...photo,
+    isMain: photo.id === photoId,
+  }));
+  const mainPhoto = nextPhotos.find((photo) => photo.isMain);
+  return updateAgencyProperty(property, {
+    photos: nextPhotos,
+    imageUrl: mainPhoto?.url ?? property.imageUrl,
+    image: mainPhoto?.url ?? property.image,
+  });
+}
+
+export function deletePropertyPhoto(property: AgencyProperty, photoId: string) {
+  const nextPhotos = property.photos.filter((photo) => photo.id !== photoId);
+  const hasMain = nextPhotos.some((photo) => photo.isMain);
+  const normalizedPhotos = nextPhotos.map((photo, index) => ({
+    ...photo,
+    order: index + 1,
+    isMain: hasMain ? photo.isMain : index === 0,
+  }));
+  const mainPhoto = normalizedPhotos.find((photo) => photo.isMain);
+  return updateAgencyProperty(property, {
+    photos: normalizedPhotos,
+    imageUrl: mainPhoto?.url ?? property.imageUrl,
+    image: mainPhoto?.url ?? property.image,
+  });
+}
+
+export function addPropertyVisit(
+  property: AgencyProperty,
+  data: Omit<Visit, "id" | "propertyId" | "status" | "createdAt">,
+) {
+  const visit: Visit = {
+    ...data,
+    id: `visit-${Date.now()}-${randomId()}`,
+    propertyId: property.id,
+    status: "planned",
+    createdAt: new Date().toISOString(),
+  };
+  return updateAgencyProperty(property, {
+    visits: [visit, ...property.visits],
+    nextVisit: formatVisitLabel(visit),
+  });
+}
+
+export function updatePropertyVisitStatus(
+  property: AgencyProperty,
+  visitId: string,
+  status: VisitStatus,
+) {
+  const visits = property.visits.map((visit) =>
+    visit.id === visitId ? { ...visit, status } : visit,
+  );
+  return updateAgencyProperty(property, {
+    visits,
+    nextVisit: getNextVisitLabelFromVisits(visits),
+  });
+}
+
+export function deletePropertyVisit(property: AgencyProperty, visitId: string) {
+  const visits = property.visits.filter((visit) => visit.id !== visitId);
+  return updateAgencyProperty(property, {
+    visits,
+    nextVisit: getNextVisitLabelFromVisits(visits),
+  });
+}
+
+export function addVisitReport(
+  property: AgencyProperty,
+  data: Omit<VisitReport, "id" | "propertyId" | "createdAt">,
+) {
+  const report: VisitReport = {
+    ...data,
+    id: `visit-report-${Date.now()}-${randomId()}`,
+    propertyId: property.id,
+    createdAt: new Date().toISOString(),
+  };
+  return updateAgencyProperty(property, {
+    visitReports: [report, ...property.visitReports],
+    report: report.visibleToSeller ? report.content : property.report,
+  });
+}
+
+export function updateVisitReportVisibility(
+  property: AgencyProperty,
+  reportId: string,
+  visibleToSeller: boolean,
+) {
+  const visitReports = property.visitReports.map((report) =>
+    report.id === reportId ? { ...report, visibleToSeller } : report,
+  );
+  const latestVisible = visitReports.find((report) => report.visibleToSeller);
+  return updateAgencyProperty(property, {
+    visitReports,
+    report: latestVisible?.content ?? property.report,
+  });
+}
+
+export function deleteVisitReport(property: AgencyProperty, reportId: string) {
+  return updateAgencyProperty(property, {
+    visitReports: property.visitReports.filter(
+      (report) => report.id !== reportId,
+    ),
+  });
+}
+
+export function addPropertyDocument(
+  property: AgencyProperty,
+  data: Omit<PropertyDocument, "id" | "propertyId" | "createdAt">,
+) {
+  const document: PropertyDocument = {
+    ...data,
+    id: `document-${Date.now()}-${randomId()}`,
+    propertyId: property.id,
+    createdAt: new Date().toISOString(),
+  };
+  return updateAgencyProperty(property, {
+    propertyDocuments: [document, ...property.propertyDocuments],
+    documents: [
+      document.name,
+      ...property.documents.filter((item) => item !== document.name),
+    ],
+  });
+}
+
+export function updatePropertyDocumentVisibility(
+  property: AgencyProperty,
+  documentId: string,
+  visibleToSeller: boolean,
+) {
+  return updateAgencyProperty(property, {
+    propertyDocuments: property.propertyDocuments.map((document) =>
+      document.id === documentId ? { ...document, visibleToSeller } : document,
+    ),
+  });
+}
+
+export function deletePropertyDocument(
+  property: AgencyProperty,
+  documentId: string,
+) {
+  const propertyDocuments = property.propertyDocuments.filter(
+    (document) => document.id !== documentId,
+  );
+  return updateAgencyProperty(property, {
+    propertyDocuments,
+    documents: propertyDocuments.map((document) => document.name),
+  });
 }
 
 export function createSellerAccessForProperty(property: AgencyProperty) {
@@ -601,37 +974,111 @@ export function createSellerInviteForProperty(
   };
 }
 
+export function getEstimationLeads() {
+  const leads = readStored<Partial<AgencyLead>[]>(ESTIMATION_LEADS_KEY, []).map(
+    coerceLead,
+  );
+  const legacyLeads = readStored<Partial<AgencyLead>[]>(
+    LEGACY_LEADS_KEY,
+    [],
+  ).map(coerceLead);
+  const byId = new Map<string, AgencyLead>();
+
+  [...legacyLeads, ...leads].forEach((lead) => {
+    if (lead.id) byId.set(lead.id, lead);
+  });
+
+  const nextLeads = Array.from(byId.values());
+  const hasLegacyLeadToMigrate = legacyLeads.some(
+    (legacyLead) => !leads.some((lead) => lead.id === legacyLead.id),
+  );
+  if (
+    legacyLeads.length &&
+    (hasLegacyLeadToMigrate || nextLeads.length !== leads.length)
+  ) {
+    saveEstimationLeads(nextLeads);
+  }
+
+  return nextLeads;
+}
+
+export function saveEstimationLeads(leads: AgencyLead[]) {
+  writeStored(ESTIMATION_LEADS_KEY, leads.map(coerceLead));
+}
+
 export function getAgencyLeads(slug: string) {
-  return readStored<Partial<AgencyLead>[]>(LEADS_KEY, [])
-    .map(coerceLead)
-    .filter((lead) => lead.agencySlug === slug);
+  return getEstimationLeads().filter((lead) => lead.agencySlug === slug);
 }
 
 export function saveAgencyLead(
-  lead: Omit<AgencyLead, "id" | "createdAt" | "status">,
+  lead: Omit<AgencyLead, "id" | "createdAt" | "updatedAt" | "status">,
 ) {
+  const now = new Date().toISOString();
   const nextLead: AgencyLead = {
     ...lead,
     id: `lead-${Date.now()}-${randomId()}`,
-    createdAt: new Date().toISOString(),
-    status: "Nouveau",
+    createdAt: now,
+    updatedAt: now,
+    status: "new",
   };
-  writeStored(LEADS_KEY, [
-    nextLead,
-    ...readStored<Partial<AgencyLead>[]>(LEADS_KEY, []).map(coerceLead),
-  ]);
+  saveEstimationLeads([nextLead, ...getEstimationLeads()]);
   return nextLead;
 }
 
 export function updateAgencyLeadStatus(id: string, status: AgencyLeadStatus) {
-  const leads = readStored<Partial<AgencyLead>[]>(LEADS_KEY, []).map(
-    coerceLead,
-  );
+  const leads = getEstimationLeads();
   const nextLeads = leads.map((lead) =>
-    lead.id === id ? { ...lead, status } : lead,
+    lead.id === id
+      ? { ...lead, status, updatedAt: new Date().toISOString() }
+      : lead,
   );
-  writeStored(LEADS_KEY, nextLeads);
+  saveEstimationLeads(nextLeads);
   return nextLeads;
+}
+
+export function getVisitRequests() {
+  return readStored<Partial<VisitRequest>[]>(VISIT_REQUESTS_KEY, []).map(
+    coerceVisitRequest,
+  );
+}
+
+export function saveVisitRequests(requests: VisitRequest[]) {
+  writeStored(VISIT_REQUESTS_KEY, requests.map(coerceVisitRequest));
+}
+
+export function createVisitRequest(
+  data: Omit<VisitRequest, "id" | "createdAt" | "updatedAt" | "status">,
+) {
+  const now = new Date().toISOString();
+  const request: VisitRequest = {
+    ...data,
+    id: `visit-request-${Date.now()}-${randomId()}`,
+    status: "new",
+    createdAt: now,
+    updatedAt: now,
+  };
+  saveVisitRequests([request, ...getVisitRequests()]);
+  return request;
+}
+
+export function getVisitRequestsByAgency(agencyId: string) {
+  return getVisitRequests().filter((request) => request.agencyId === agencyId);
+}
+
+export function getVisitRequestsByProperty(propertyId: string) {
+  return getVisitRequests().filter(
+    (request) => request.propertyId === propertyId,
+  );
+}
+
+export function updateVisitRequestStatus(id: string, status: LeadStatus) {
+  const requests = getVisitRequests().map((request) =>
+    request.id === id
+      ? { ...request, status, updatedAt: new Date().toISOString() }
+      : request,
+  );
+  saveVisitRequests(requests);
+  return requests;
 }
 
 export function getAccessTokens() {
@@ -971,58 +1418,167 @@ export function getAgencyAccessUrl(access: AccessToken) {
 
 export function createDemoProperties(agency: Agency): AgencyProperty[] {
   const images = agencyConfig.properties;
+  const now = defaultTimestamp;
+  const firstImage = images[0].coverImage;
+  const secondImage = images[1]?.coverImage ?? firstImage;
   return [
     {
       id: `${agency.slug}-maison-familiale`,
       agencyId: agency.id,
+      agencySlug: agency.slug,
+      slug: `${agency.slug}-maison-familiale`,
       title: `Maison familiale ${agency.city ? `à ${agency.city}` : "avec jardin"}`,
       type: "Maison",
       city: agency.city || "Tarbes",
       address: "Quartier résidentiel",
+      addressOrDistrict: "Quartier résidentiel",
       price: "356 000 €",
       surface: "124 m²",
       rooms: "5",
       bedrooms: "4",
-      publicStatus: "Exclusivité",
+      publicStatus: "exclusive",
+      internalProgress: "visits",
       internalStatus: "Visites en cours",
+      isPublished: true,
       nextVisit: "Samedi 15 juin à 10h30",
       report:
         "Visite sérieuse. Les acheteurs ont apprécié la luminosité et l’emplacement. Ils souhaitent revoir le bien avec un proche avant de se positionner.",
       description:
         "Une annonce premium pensée pour valoriser le bien et rendre le suivi vendeur plus clair.",
-      image: images[0].coverImage,
+      image: firstImage,
+      imageUrl: firstImage,
+      photos: [
+        {
+          id: `${agency.slug}-maison-photo-1`,
+          propertyId: `${agency.slug}-maison-familiale`,
+          url: firstImage,
+          alt: "Maison familiale",
+          isMain: true,
+          order: 1,
+          createdAt: now,
+        },
+      ],
       sellerToken: `${agency.slug}-seller-demo-1`,
       sellerFirstName: "Claire",
       sellerLastName: "Martin",
       sellerEmail: "claire.martin@example.com",
       sellerPhone: "06 00 00 00 00",
       documents: ["Mandat", "Diagnostics", "Offre", "Compromis"],
+      propertyDocuments: ["Mandat", "Diagnostics", "Offre", "Compromis"].map(
+        (name, index) => ({
+          id: `${agency.slug}-maison-document-${index + 1}`,
+          propertyId: `${agency.slug}-maison-familiale`,
+          name,
+          type: isDocumentType(name) ? name : "Autre",
+          url: "",
+          visibleToSeller: true,
+          createdAt: now,
+        }),
+      ),
+      visits: [
+        {
+          id: `${agency.slug}-maison-visit-1`,
+          propertyId: `${agency.slug}-maison-familiale`,
+          date: "2026-06-15",
+          time: "10:30",
+          visitorName: "Acheteur qualifié",
+          visitorPhone: "",
+          note: "Visite de découverte.",
+          status: "planned",
+          createdAt: now,
+        },
+      ],
+      visitReports: [
+        {
+          id: `${agency.slug}-maison-report-1`,
+          propertyId: `${agency.slug}-maison-familiale`,
+          title: "Retour de visite",
+          content:
+            "Visite sérieuse. Les acheteurs ont apprécié la luminosité et l’emplacement.",
+          visibleToSeller: true,
+          createdAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
     },
     {
       id: `${agency.slug}-appartement-centre`,
       agencyId: agency.id,
+      agencySlug: agency.slug,
+      slug: `${agency.slug}-appartement-centre`,
       title: `Appartement rénové ${agency.city ? `à ${agency.city}` : "en centre-ville"}`,
       type: "Appartement",
       city: agency.city || "Bagnères-de-Bigorre",
       address: "Centre-ville",
+      addressOrDistrict: "Centre-ville",
       price: "214 000 €",
       surface: "72 m²",
       rooms: "3",
       bedrooms: "2",
-      publicStatus: "Nouveauté",
+      publicStatus: "new",
+      internalProgress: "published",
       internalStatus: "Annonce publiée",
+      isPublished: true,
       nextVisit: "Mercredi 19 juin à 17h00",
       report:
         "Les visiteurs ont demandé des précisions sur les charges et le calendrier de signature.",
       description:
         "Un exemple de bien pour montrer la qualité de présentation disponible après activation.",
-      image: images[1]?.coverImage ?? images[0].coverImage,
+      image: secondImage,
+      imageUrl: secondImage,
+      photos: [
+        {
+          id: `${agency.slug}-appartement-photo-1`,
+          propertyId: `${agency.slug}-appartement-centre`,
+          url: secondImage,
+          alt: "Appartement rénové",
+          isMain: true,
+          order: 1,
+          createdAt: now,
+        },
+      ],
       sellerToken: `${agency.slug}-seller-demo-2`,
       sellerFirstName: "Julien",
       sellerLastName: "Durand",
       sellerEmail: "julien.durand@example.com",
       sellerPhone: "06 00 00 00 00",
       documents: ["Mandat", "Diagnostics"],
+      propertyDocuments: ["Mandat", "Diagnostics"].map((name, index) => ({
+        id: `${agency.slug}-appartement-document-${index + 1}`,
+        propertyId: `${agency.slug}-appartement-centre`,
+        name,
+        type: isDocumentType(name) ? name : "Autre",
+        url: "",
+        visibleToSeller: true,
+        createdAt: now,
+      })),
+      visits: [
+        {
+          id: `${agency.slug}-appartement-visit-1`,
+          propertyId: `${agency.slug}-appartement-centre`,
+          date: "2026-06-19",
+          time: "17:00",
+          visitorName: "",
+          visitorPhone: "",
+          note: "",
+          status: "planned",
+          createdAt: now,
+        },
+      ],
+      visitReports: [
+        {
+          id: `${agency.slug}-appartement-report-1`,
+          propertyId: `${agency.slug}-appartement-centre`,
+          title: "Questions acheteurs",
+          content:
+            "Les visiteurs ont demandé des précisions sur les charges et le calendrier.",
+          visibleToSeller: true,
+          createdAt: now,
+        },
+      ],
+      createdAt: now,
+      updatedAt: now,
     },
   ];
 }
@@ -1300,37 +1856,79 @@ function coerceTeamMember(member: unknown): TeamMember {
 }
 
 function coerceProperty(property: unknown): AgencyProperty {
+  const now = new Date().toISOString();
   if (!isRecord(property)) markStorageReset();
   const source = isRecord(property) ? property : {};
   const fallbackImage = agencyConfig.properties[0]?.coverImage ?? "";
+  const id = safeString(source.id, `property-${Date.now()}-${randomId()}`);
+  const agencyId = safeString(source.agencyId);
+  const agency = agencyId ? getAgencyById(agencyId) : null;
+  const title = safeString(source.title, "Bien sans titre");
+  const address =
+    safeString(source.address) || safeString(source.addressOrDistrict);
+  const imageUrl =
+    safeString(source.imageUrl) ||
+    safeString(source.image) ||
+    safeString(source.coverImage) ||
+    fallbackImage;
+  const photos = coercePropertyPhotos(source.photos, id, title, imageUrl);
+  const documents = safeStringArray(source.documents);
+  const propertyDocuments = coercePropertyDocuments(
+    source.propertyDocuments,
+    id,
+    documents,
+  );
   return {
-    id: safeString(source.id, `property-${Date.now()}-${randomId()}`),
-    agencyId: safeString(source.agencyId),
-    title: safeString(source.title, "Bien sans titre"),
+    id,
+    agencyId,
+    agencySlug: safeString(source.agencySlug) || agency?.slug || "",
+    slug: safeString(source.slug) || normalizeSlug(`${title}-${id}`),
+    title,
     type: safeString(source.type, "Maison"),
     city: safeString(source.city),
-    address: safeString(source.address),
+    address,
+    addressOrDistrict: safeString(source.addressOrDistrict) || address,
     price: safeString(source.price),
     surface: safeString(source.surface),
     rooms: safeString(source.rooms),
     bedrooms: safeString(source.bedrooms),
     publicStatus: isPropertyPublicStatus(source.publicStatus)
       ? source.publicStatus
-      : "Disponible",
-    internalStatus: safeString(source.internalStatus, "Annonce publiée"),
+      : "none",
+    internalProgress: isPropertyInternalProgress(source.internalProgress)
+      ? source.internalProgress
+      : internalProgressFromLabel(source.internalStatus),
+    internalStatus: safeString(
+      source.internalStatus,
+      internalProgressLabel(
+        isPropertyInternalProgress(source.internalProgress)
+          ? source.internalProgress
+          : "published",
+      ),
+    ),
+    isPublished:
+      typeof source.isPublished === "boolean" ? source.isPublished : true,
     nextVisit: safeString(source.nextVisit, "À planifier"),
     report: safeString(
       source.report,
       "Aucun compte rendu disponible pour le moment.",
     ),
     description: safeString(source.description),
-    image: safeString(source.image, fallbackImage),
+    image: imageUrl,
+    imageUrl,
+    photos,
     sellerToken: safeString(source.sellerToken),
     sellerFirstName: safeString(source.sellerFirstName),
     sellerLastName: safeString(source.sellerLastName),
     sellerEmail: cleanEmail(safeString(source.sellerEmail)),
     sellerPhone: safeString(source.sellerPhone).trim(),
-    documents: safeStringArray(source.documents),
+    documents,
+    propertyDocuments,
+    visits: coerceVisits(source.visits, id),
+    visitReports: coerceVisitReports(source.visitReports, id),
+    createdAt: safeString(source.createdAt, now),
+    updatedAt:
+      safeString(source.updatedAt) || safeString(source.createdAt, now),
   };
 }
 
@@ -1340,12 +1938,14 @@ function coerceLead(lead: unknown): AgencyLead {
   const source = isRecord(lead) ? lead : {};
   return {
     id: safeString(source.id, `lead-${Date.now()}-${randomId()}`),
+    agencyId: optionalString(source.agencyId),
     agencySlug: safeString(source.agencySlug),
     agencyName: safeString(source.agencyName),
     firstName: safeString(source.firstName),
     lastName: safeString(source.lastName),
     phone: safeString(source.phone),
     email: cleanEmail(safeString(source.email)),
+    propertyAddress: optionalString(source.propertyAddress),
     propertyType: safeString(source.propertyType),
     propertyCity: safeString(source.propertyCity),
     surface: safeString(source.surface),
@@ -1356,10 +1956,168 @@ function coerceLead(lead: unknown): AgencyLead {
     sellingDelay: safeString(source.sellingDelay),
     estimateLow: optionalString(source.estimateLow),
     estimateHigh: optionalString(source.estimateHigh),
+    estimatedRangeMin:
+      optionalString(source.estimatedRangeMin) ??
+      optionalString(source.estimateLow),
+    estimatedRangeMax:
+      optionalString(source.estimatedRangeMax) ??
+      optionalString(source.estimateHigh),
+    message: optionalString(source.message),
+    assignedAgentId: optionalString(source.assignedAgentId),
     answers: optionalString(source.answers),
-    status: isAgencyLeadStatus(source.status) ? source.status : "Nouveau",
+    status: normalizeLeadStatus(source.status),
     createdAt: safeString(source.createdAt, now),
+    updatedAt:
+      safeString(source.updatedAt) || safeString(source.createdAt, now),
   };
+}
+
+function coerceVisitRequest(request: unknown): VisitRequest {
+  const now = new Date().toISOString();
+  if (!isRecord(request)) markStorageReset();
+  const source = isRecord(request) ? request : {};
+  return {
+    id: safeString(source.id, `visit-request-${Date.now()}-${randomId()}`),
+    agencyId: safeString(source.agencyId),
+    agencySlug: safeString(source.agencySlug),
+    propertyId: safeString(source.propertyId),
+    propertyTitle: safeString(source.propertyTitle),
+    propertyCity: safeString(source.propertyCity),
+    propertyPrice: safeString(source.propertyPrice),
+    firstName: safeString(source.firstName),
+    lastName: safeString(source.lastName),
+    phone: safeString(source.phone),
+    email: cleanEmail(safeString(source.email)),
+    buyerSituation: safeString(source.buyerSituation),
+    financingStatus: safeString(source.financingStatus),
+    buyingTimeline: safeString(source.buyingTimeline),
+    message: safeString(source.message),
+    status: normalizeLeadStatus(source.status),
+    createdAt: safeString(source.createdAt, now),
+    updatedAt:
+      safeString(source.updatedAt) || safeString(source.createdAt, now),
+  };
+}
+
+function coercePropertyPhotos(
+  value: unknown,
+  propertyId: string,
+  title: string,
+  fallbackUrl: string,
+) {
+  const now = new Date().toISOString();
+  const photos = Array.isArray(value)
+    ? value
+        .filter(isRecord)
+        .map(
+          (photo, index): PropertyPhoto => ({
+            id: safeString(photo.id, `photo-${propertyId}-${index + 1}`),
+            propertyId: safeString(photo.propertyId, propertyId),
+            url: safeString(photo.url),
+            alt: safeString(photo.alt, title),
+            isMain: Boolean(photo.isMain),
+            order: Number(photo.order) || index + 1,
+            createdAt: safeString(photo.createdAt, now),
+          }),
+        )
+        .filter((photo) => photo.url)
+    : [];
+
+  if (!photos.length && fallbackUrl) {
+    return [
+      {
+        id: `photo-${propertyId}-main`,
+        propertyId,
+        url: fallbackUrl,
+        alt: title,
+        isMain: true,
+        order: 1,
+        createdAt: now,
+      },
+    ];
+  }
+
+  const hasMain = photos.some((photo) => photo.isMain);
+  return photos.map((photo, index) => ({
+    ...photo,
+    order: index + 1,
+    isMain: hasMain ? photo.isMain : index === 0,
+  }));
+}
+
+function coerceVisits(value: unknown, propertyId: string) {
+  const now = new Date().toISOString();
+  return Array.isArray(value)
+    ? value.filter(isRecord).map(
+        (visit, index): Visit => ({
+          id: safeString(visit.id, `visit-${propertyId}-${index + 1}`),
+          propertyId: safeString(visit.propertyId, propertyId),
+          date: safeString(visit.date),
+          time: safeString(visit.time),
+          visitorName: safeString(visit.visitorName),
+          visitorPhone: safeString(visit.visitorPhone),
+          note: safeString(visit.note),
+          status: isVisitStatus(visit.status) ? visit.status : "planned",
+          createdAt: safeString(visit.createdAt, now),
+        }),
+      )
+    : [];
+}
+
+function coerceVisitReports(value: unknown, propertyId: string) {
+  const now = new Date().toISOString();
+  return Array.isArray(value)
+    ? value.filter(isRecord).map(
+        (report, index): VisitReport => ({
+          id: safeString(report.id, `visit-report-${propertyId}-${index + 1}`),
+          propertyId: safeString(report.propertyId, propertyId),
+          visitId: optionalString(report.visitId),
+          title: safeString(report.title),
+          content: safeString(report.content),
+          visibleToSeller:
+            typeof report.visibleToSeller === "boolean"
+              ? report.visibleToSeller
+              : true,
+          createdAt: safeString(report.createdAt, now),
+        }),
+      )
+    : [];
+}
+
+function coercePropertyDocuments(
+  value: unknown,
+  propertyId: string,
+  legacyNames: string[],
+) {
+  const now = new Date().toISOString();
+  const documents = Array.isArray(value)
+    ? value.filter(isRecord).map(
+        (document, index): PropertyDocument => ({
+          id: safeString(document.id, `document-${propertyId}-${index + 1}`),
+          propertyId: safeString(document.propertyId, propertyId),
+          name: safeString(document.name, "Document"),
+          type: isDocumentType(document.type) ? document.type : "Autre",
+          url: safeString(document.url),
+          visibleToSeller:
+            typeof document.visibleToSeller === "boolean"
+              ? document.visibleToSeller
+              : true,
+          createdAt: safeString(document.createdAt, now),
+        }),
+      )
+    : [];
+
+  if (documents.length) return documents;
+
+  return legacyNames.map((name, index) => ({
+    id: `document-${propertyId}-${index + 1}`,
+    propertyId,
+    name,
+    type: isDocumentType(name) ? name : "Autre",
+    url: "",
+    visibleToSeller: true,
+    createdAt: now,
+  }));
 }
 
 function coerceAccessToken(access: unknown): AccessToken {
@@ -1504,18 +2262,28 @@ function isAccessTokenType(value: unknown): value is AccessTokenType {
 }
 
 function isAgencyLeadStatus(value: unknown): value is AgencyLeadStatus {
-  return (
-    value === "Nouveau" ||
-    value === "Rappelé" ||
-    value === "Converti" ||
-    value === "Perdu"
-  );
+  return isLeadStatus(value);
+}
+
+function isLeadStatus(value: unknown): value is LeadStatus {
+  return value === "new" || value === "contacted" || value === "archived";
+}
+
+function normalizeLeadStatus(value: unknown): LeadStatus {
+  if (value === "contacted" || value === "Rappelé" || value === "Converti")
+    return "contacted";
+  if (value === "archived" || value === "Perdu") return "archived";
+  return "new";
 }
 
 function isPropertyPublicStatus(
   value: unknown,
 ): value is AgencyProperty["publicStatus"] {
   return (
+    value === "none" ||
+    value === "new" ||
+    value === "exclusive" ||
+    value === "favorite" ||
     value === "Disponible" ||
     value === "Nouveauté" ||
     value === "Exclusivité" ||
@@ -1523,6 +2291,83 @@ function isPropertyPublicStatus(
     value === "Vendu" ||
     value === "Coup de cœur"
   );
+}
+
+function isPropertyInternalProgress(
+  value: unknown,
+): value is PropertyInternalProgress {
+  return (
+    value === "mandate_signed" ||
+    value === "published" ||
+    value === "visits" ||
+    value === "offer_received" ||
+    value === "compromise_signed" ||
+    value === "sold"
+  );
+}
+
+function isVisitStatus(value: unknown): value is VisitStatus {
+  return value === "planned" || value === "done" || value === "cancelled";
+}
+
+function isDocumentType(value: unknown): value is DocumentType {
+  return (
+    value === "Mandat" ||
+    value === "Diagnostics" ||
+    value === "Offre" ||
+    value === "Compromis" ||
+    value === "Autre"
+  );
+}
+
+export function publicStatusLabel(status: PropertyPublicStatus) {
+  if (status === "new" || status === "Nouveauté") return "Nouveauté";
+  if (status === "exclusive" || status === "Exclusivité") return "Exclusivité";
+  if (status === "favorite" || status === "Coup de cœur") return "Coup de cœur";
+  return "";
+}
+
+export function internalProgressLabel(progress: PropertyInternalProgress) {
+  const labels: Record<PropertyInternalProgress, string> = {
+    mandate_signed: "Mandat signé",
+    published: "Annonce publiée",
+    visits: "Visites",
+    offer_received: "Offre reçue",
+    compromise_signed: "Compromis signé",
+    sold: "Vente",
+  };
+  return labels[progress];
+}
+
+export function leadStatusLabel(status: LeadStatus) {
+  if (status === "contacted") return "Contacté";
+  if (status === "archived") return "Archivé";
+  return "Nouveau";
+}
+
+function internalProgressFromLabel(value: unknown): PropertyInternalProgress {
+  const label = safeString(value).toLowerCase();
+  if (label.includes("mandat")) return "mandate_signed";
+  if (label.includes("visite")) return "visits";
+  if (label.includes("offre")) return "offer_received";
+  if (label.includes("compromis")) return "compromise_signed";
+  if (label.includes("vente") || label.includes("vendu")) return "sold";
+  return "published";
+}
+
+function formatVisitLabel(visit: Visit) {
+  const date = visit.date || "Date à préciser";
+  const time = visit.time ? ` à ${visit.time}` : "";
+  return `${date}${time}`;
+}
+
+function getNextVisitLabelFromVisits(visits: Visit[]) {
+  const nextVisit = visits
+    .filter((visit) => visit.status === "planned")
+    .sort((a, b) =>
+      `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`),
+    )[0];
+  return nextVisit ? formatVisitLabel(nextVisit) : "À planifier";
 }
 
 function invalidInviteResult(
@@ -1546,11 +2391,11 @@ function createPilotPasswordMarker(password: string) {
 
 export function getAppBaseUrl() {
   const env = import.meta.env as Record<string, string | undefined>;
-  if (env.NEXT_PUBLIC_APP_URL)
-    return env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   if (typeof window !== "undefined" && window.location.origin) {
     return window.location.origin.replace(/\/$/, "");
   }
+  if (env.NEXT_PUBLIC_APP_URL)
+    return env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "");
   return "https://signature-immobilier-app.vercel.app";
 }
 

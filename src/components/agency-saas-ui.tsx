@@ -155,11 +155,23 @@ export function StatusBadge({ status }: { status: AgencyStatus | string }) {
               ? "désactivé"
               : status;
   const classes =
-    status === "active" || status === "actif" || status === "Converti"
+    status === "active" ||
+    status === "actif" ||
+    status === "Converti" ||
+    status === "visible" ||
+    status === "publié"
       ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-      : status === "disabled" || status === "désactivé" || status === "Perdu"
+      : status === "disabled" ||
+          status === "désactivé" ||
+          status === "Perdu" ||
+          status === "Archivé" ||
+          status === "masqué" ||
+          status === "annulée"
         ? "border-red-200 bg-red-50 text-red-700"
-        : status === "Rappelé"
+        : status === "Rappelé" ||
+            status === "Contacté" ||
+            status === "prévue" ||
+            status === "réalisée"
           ? "border-blue-200 bg-blue-50 text-blue-700"
           : "border-amber-200 bg-amber-50 text-amber-700";
 

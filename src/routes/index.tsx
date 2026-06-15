@@ -9,12 +9,13 @@ import {
   MapPin,
   Search,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { PropertyCard } from "@/components/property-card";
 import { PropertyDetails } from "@/components/property-details";
 import { SiteLayout } from "@/components/site-layout";
-import { agencyConfig, type Property } from "@/lib/agency-config";
+import { agencyConfig } from "@/lib/agency-config";
+import { getPublicProperties, type AgencyProperty } from "@/lib/agency-saas";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -63,31 +64,37 @@ const reassurance = [
 const sellerSpaceBlocks = [
   {
     icon: CheckCircle2,
-    title: "Progression de la vente",
-    text: "Mandat, annonce, visites, offre, compromis, vente.",
+    title: "Avancement clair",
+    text: "Mandat, annonce, visites, offre, compromis, vente : chaque étape est visible simplement.",
   },
   {
     icon: Bell,
-    title: "Prochaine visite",
-    text: "Date, heure et informations importantes.",
+    title: "Retours après visite",
+    text: "Après une visite, l’agence peut ajouter un compte rendu clair pour éviter les zones d’ombre.",
   },
   {
     icon: FileText,
-    title: "Comptes rendus",
-    text: "Les retours après visite sont centralisés.",
+    title: "Documents au même endroit",
+    text: "Mandat, diagnostics, offre ou compromis restent accessibles dans votre espace privé.",
   },
   {
     icon: FolderClosed,
-    title: "Documents",
-    text: "Mandat, diagnostics, offre et compromis accessibles facilement.",
+    title: "Moins de stress",
+    text: "Vous gardez une vision claire de votre vente, même entre deux appels avec l’agence.",
   },
 ] as const;
 
 function Page() {
-  const [selectedProperty, setSelectedProperty] = useState<Property | null>(
-    null,
+  const [properties, setProperties] = useState<AgencyProperty[]>(() =>
+    getPublicProperties(),
   );
-  const featuredProperty = agencyConfig.properties[0];
+  const [selectedProperty, setSelectedProperty] =
+    useState<AgencyProperty | null>(null);
+  const featuredProperty = properties[0];
+
+  useEffect(() => {
+    setProperties(getPublicProperties());
+  }, []);
   return (
     <SiteLayout variant="public">
       <section className="relative overflow-hidden">
@@ -153,7 +160,7 @@ function Page() {
               <div className="absolute -right-10 top-8 h-64 w-64 rounded-full bg-gold/10 blur-3xl" />
               <div className="relative overflow-hidden rounded-[2rem] bg-secondary shadow-2xl shadow-foreground/10">
                 <img
-                  src={featuredProperty.coverImage}
+                  src={featuredProperty.imageUrl || featuredProperty.image}
                   alt={featuredProperty.title}
                   className="h-[520px] w-full object-cover md:h-[620px]"
                 />
@@ -167,7 +174,7 @@ function Page() {
                   </div>
                   <div className="mt-3 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
                     <span>{featuredProperty.city}</span>
-                    <span>{featuredProperty.surface} m²</span>
+                    <span>{featuredProperty.surface}</span>
                     <span>{featuredProperty.rooms} pièces</span>
                   </div>
                   <div className="mt-4 flex items-center justify-between gap-4">
@@ -213,7 +220,7 @@ function Page() {
         </div>
 
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
-          {agencyConfig.properties.map((property) => (
+          {properties.map((property) => (
             <PropertyCard
               key={property.id}
               property={property}
@@ -246,14 +253,16 @@ function Page() {
         <div className="mx-auto max-w-7xl px-5 py-16 md:px-8 md:py-24">
           <div className="max-w-3xl">
             <div className="text-xs uppercase tracking-[0.25em] text-muted-foreground">
-              Mon suivi
+              SUIVI VENDEUR PRIVÉ
             </div>
             <h2 className="mt-3 font-display text-4xl leading-tight md:text-6xl">
-              Un espace vendeur privé après le mandat.
+              Vous savez toujours où en est votre vente.
             </h2>
             <p className="mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground md:text-lg">
               Une fois votre bien confié à l’agence, vous accédez à un espace
-              simple pour suivre l’avancement de votre vente sans relancer votre
+              simple et privé. Vous y retrouvez les étapes de vente, les visites
+              prévues, les retours après visite et les documents importants.
+              Tout est centralisé, sans avoir besoin de relancer votre
               conseiller.
             </p>
           </div>
@@ -277,13 +286,14 @@ function Page() {
 
           <div className="mt-10 flex flex-wrap items-center gap-4">
             <p className="max-w-xl font-medium text-foreground">
-              Vous ne demandez plus où ça en est. Vous le voyez.
+              Le but n’est pas d’ajouter un outil de plus. Le but est de rendre
+              votre vente plus lisible.
             </p>
             <Link
               to={agencyConfig.navigation.primaryCta.to}
               className="inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90"
             >
-              Estimer mon bien
+              Commencer par estimer mon bien
               <ArrowRight className="h-4 w-4" />
             </Link>
           </div>

@@ -6,12 +6,14 @@ import {
   Copy,
   ExternalLink,
   FileText,
+  ImagePlus,
   Link2,
   LogOut,
   Mail,
   Save,
+  Trash2,
 } from "lucide-react";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 
 import {
   Field,
@@ -24,16 +26,32 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { agencyConfig } from "@/lib/agency-config";
 import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
+  addPropertyDocument,
+  addPropertyPhoto,
+  addPropertyVisit,
+  addVisitReport,
   createSellerInviteForProperty,
+  deletePropertyDocument,
+  deletePropertyPhoto,
+  deletePropertyVisit,
+  deleteVisitReport,
   getAgencyBySlug,
   getAgencyProperty,
-  getSellerAccessLink,
+  getPublicPropertyUrl,
+  internalProgressLabel,
+  publicStatusLabel,
   saveAgencyProperty,
+  setMainPropertyPhoto,
+  updatePropertyDocumentVisibility,
+  updatePropertyVisitStatus,
+  updateVisitReportVisibility,
   type Agency,
   type AgencyProperty,
+  type DocumentType,
+  type PropertyInternalProgress,
+  type PropertyPublicStatus,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
 
@@ -44,12 +62,38 @@ export const Route = createFileRoute("/agence/$slug/biens/$propertyId/gerer")({
   component: AgencyPropertyDetailRoute,
 });
 
+const progressSteps: PropertyInternalProgress[] = [
+  "mandate_signed",
+  "published",
+  "visits",
+  "offer_received",
+  "compromise_signed",
+  "sold",
+];
+
+const publicStatusOptions: { value: PropertyPublicStatus; label: string }[] = [
+  { value: "none", label: "Aucun badge public" },
+  { value: "new", label: "Nouveauté" },
+  { value: "exclusive", label: "Exclusivité" },
+  { value: "favorite", label: "Coup de cœur" },
+];
+
+const documentTypes: DocumentType[] = [
+  "Mandat",
+  "Diagnostics",
+  "Offre",
+  "Compromis",
+  "Autre",
+];
+
 function AgencyPropertyDetailRoute() {
   const { slug, propertyId } = Route.useParams();
   const [agency, setAgency] = useState<Agency | null>(null);
   const [property, setProperty] = useState<AgencyProperty | null>(null);
   const [feedback, setFeedback] = useState("");
+  const [saving, setSaving] = useState(false);
   const [manualSellerInviteLink, setManualSellerInviteLink] = useState("");
+  const [manualSellerInviteMailto, setManualSellerInviteMailto] = useState("");
   const [manualSellerInviteCopied, setManualSellerInviteCopied] =
     useState(false);
   const [sellerError, setSellerError] = useState("");
@@ -59,7 +103,25 @@ function AgencyPropertyDetailRoute() {
     email: "",
     phone: "",
   });
-  const [newDocument, setNewDocument] = useState("");
+  const [photoForm, setPhotoForm] = useState({ url: "", alt: "" });
+  const [visitForm, setVisitForm] = useState({
+    date: "",
+    time: "",
+    visitorName: "",
+    visitorPhone: "",
+    note: "",
+  });
+  const [reportForm, setReportForm] = useState({
+    title: "",
+    content: "",
+    visibleToSeller: true,
+  });
+  const [documentForm, setDocumentForm] = useState({
+    name: "",
+    type: "Mandat" as DocumentType,
+    url: "",
+    visibleToSeller: true,
+  });
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
@@ -79,6 +141,11 @@ function AgencyPropertyDetailRoute() {
     }
     setLoaded(true);
   }, [slug, propertyId]);
+
+  const publicUrl = useMemo(
+    () => (property ? getPublicPropertyUrl(property) : ""),
+    [property],
+  );
 
   if (!loaded) return null;
 
@@ -107,28 +174,96 @@ function AgencyPropertyDetailRoute() {
       : agency.status === "demo"
         ? "Votre agence est actuellement en version démo."
         : "";
+  const canEdit = agency.status === "active";
+  const heroImage = property.imageUrl || property.image;
+  const currentProgressIndex = Math.max(
+    progressSteps.indexOf(property.internalProgress),
+    0,
+  );
 
-  function updateProperty(nextProperty: AgencyProperty) {
+  function updateProperty(nextProperty: AgencyProperty, message?: string) {
     saveAgencyProperty(nextProperty);
     setProperty(nextProperty);
+    if (message) setFeedback(message);
   }
 
   function onSaveInfo(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!property) return;
-    updateProperty(property);
-    setFeedback("Bien enregistré.");
+    setSaving(true);
+    updateProperty(
+      {
+        ...property,
+        addressOrDistrict: property.addressOrDistrict || property.address,
+        updatedAt: new Date().toISOString(),
+      },
+      "Annonce mise à jour.",
+    );
+    window.setTimeout(() => setSaving(false), 250);
+  }
+
+  function onAddPhoto(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property || !photoForm.url.trim()) return;
+    const nextProperty = addPropertyPhoto(property, {
+      url: photoForm.url.trim(),
+      alt: photoForm.alt.trim() || property.title,
+    });
+    setProperty(nextProperty);
+    setPhotoForm({ url: "", alt: "" });
+    setFeedback("Photo ajoutée.");
+  }
+
+  function onAddVisit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property || !visitForm.date.trim()) return;
+    const nextProperty = addPropertyVisit(property, {
+      date: visitForm.date,
+      time: visitForm.time,
+      visitorName: visitForm.visitorName,
+      visitorPhone: visitForm.visitorPhone,
+      note: visitForm.note,
+    });
+    setProperty(nextProperty);
+    setVisitForm({
+      date: "",
+      time: "",
+      visitorName: "",
+      visitorPhone: "",
+      note: "",
+    });
+    setFeedback("Visite ajoutée.");
+  }
+
+  function onAddReport(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!property || !reportForm.content.trim()) return;
+    const nextProperty = addVisitReport(property, {
+      title: reportForm.title.trim() || "Compte rendu de visite",
+      content: reportForm.content.trim(),
+      visibleToSeller: reportForm.visibleToSeller,
+    });
+    setProperty(nextProperty);
+    setReportForm({ title: "", content: "", visibleToSeller: true });
+    setFeedback("Compte rendu ajouté.");
   }
 
   function onAddDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!property || !newDocument.trim()) return;
-    const nextProperty = {
-      ...property,
-      documents: [...property.documents, newDocument.trim()],
-    };
-    updateProperty(nextProperty);
-    setNewDocument("");
+    if (!property || !documentForm.name.trim()) return;
+    const nextProperty = addPropertyDocument(property, {
+      name: documentForm.name.trim(),
+      type: documentForm.type,
+      url: documentForm.url.trim(),
+      visibleToSeller: documentForm.visibleToSeller,
+    });
+    setProperty(nextProperty);
+    setDocumentForm({
+      name: "",
+      type: "Mandat",
+      url: "",
+      visibleToSeller: true,
+    });
     setFeedback("Document ajouté.");
   }
 
@@ -136,6 +271,8 @@ function AgencyPropertyDetailRoute() {
     event?.preventDefault();
     if (!agency || !property) return;
     setManualSellerInviteCopied(false);
+    setManualSellerInviteLink("");
+    setManualSellerInviteMailto("");
     if (!isValidEmail(sellerForm.email)) {
       setSellerError("Email invalide.");
       return;
@@ -158,8 +295,6 @@ function AgencyPropertyDetailRoute() {
       });
 
       if (sent.sent) {
-        setManualSellerInviteLink("");
-        setManualSellerInviteCopied(false);
         setFeedback("Espace vendeur créé. Email d’invitation envoyé.");
         return;
       }
@@ -168,17 +303,10 @@ function AgencyPropertyDetailRoute() {
     }
 
     setManualSellerInviteLink(result.email.accessUrl ?? "");
-    setManualSellerInviteCopied(false);
+    setManualSellerInviteMailto(result.email.mailtoHref);
     setFeedback(
       "Invitation vendeur créée. Email non envoyé : configuration email manquante.",
     );
-  }
-
-  async function onCopySellerLink() {
-    if (!property) return;
-    const link = getSellerAccessLink(property);
-    await navigator.clipboard?.writeText(link);
-    setFeedback("Lien vendeur copié.");
   }
 
   async function onCopyManualSellerInviteLink() {
@@ -202,21 +330,25 @@ function AgencyPropertyDetailRoute() {
       <SaasHero
         eyebrow={`${agency.name} - Gestion du bien`}
         title={property.title}
-        description="Vous modifiez ici uniquement les informations visibles par vos clients vendeurs. Votre CRM reste votre outil interne."
+        description="Une page dédiée pour piloter l’annonce, les visites, les documents et l’espace vendeur sans afficher la liste des autres biens."
         action={<StatusBadge status={agency.status} />}
       />
 
       <section className="mx-auto max-w-6xl px-5 pb-16 md:px-8">
-        <Button
-          asChild
-          variant="outline"
-          className="mb-7 rounded-full bg-white"
-        >
-          <Link to="/agence/$slug" params={{ slug: agency.slug }}>
-            <ArrowLeft className="h-4 w-4" />
-            Retour aux biens
-          </Link>
-        </Button>
+        <div className="mb-7 flex flex-wrap gap-3">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+              <ArrowLeft className="h-4 w-4" />
+              Retour aux biens
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <a href={publicUrl} target="_blank" rel="noreferrer">
+              <ExternalLink className="h-4 w-4" />
+              Visualiser l’annonce
+            </a>
+          </Button>
+        </div>
 
         {lockedMessage && (
           <div className="mb-7 rounded-[28px] border border-amber-200 bg-amber-50 p-5 text-sm leading-relaxed text-amber-800">
@@ -230,7 +362,7 @@ function AgencyPropertyDetailRoute() {
             {manualSellerInviteLink && (
               <div className="mt-3 rounded-2xl bg-white/80 p-3">
                 <div className="break-all font-medium">
-                  Lien d’invitation vendeur à copier : {manualSellerInviteLink}
+                  Lien d’invitation vendeur : {manualSellerInviteLink}
                 </div>
                 <div className="mt-3 flex flex-wrap gap-2">
                   <Button
@@ -253,6 +385,19 @@ function AgencyPropertyDetailRoute() {
                     <ExternalLink className="h-4 w-4" />
                     Ouvrir le lien
                   </Button>
+                  {manualSellerInviteMailto && (
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                    >
+                      <a href={manualSellerInviteMailto}>
+                        <Mail className="h-4 w-4" />
+                        Préparer un email manuel
+                      </a>
+                    </Button>
+                  )}
                 </div>
                 {manualSellerInviteCopied && (
                   <p className="mt-2 text-xs font-medium">Lien copié.</p>
@@ -264,13 +409,20 @@ function AgencyPropertyDetailRoute() {
 
         <SaasCard className="overflow-hidden">
           <img
-            src={property.image}
+            src={heroImage}
             alt={property.title}
             className="h-72 w-full object-cover md:h-[420px]"
           />
           <div className="p-6 md:p-8">
             <div className="flex flex-wrap items-center gap-2">
-              <StatusBadge status={property.publicStatus} />
+              {publicStatusLabel(property.publicStatus) && (
+                <StatusBadge
+                  status={publicStatusLabel(property.publicStatus)}
+                />
+              )}
+              <StatusBadge
+                status={property.isPublished ? "publié" : "masqué"}
+              />
               <span className="text-sm text-primary/45">{property.city}</span>
             </div>
             <form
@@ -283,7 +435,7 @@ function AgencyPropertyDetailRoute() {
                   onChange={(event) =>
                     setProperty({ ...property, title: event.target.value })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Ville">
@@ -292,7 +444,7 @@ function AgencyPropertyDetailRoute() {
                   onChange={(event) =>
                     setProperty({ ...property, city: event.target.value })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Prix">
@@ -301,7 +453,7 @@ function AgencyPropertyDetailRoute() {
                   onChange={(event) =>
                     setProperty({ ...property, price: event.target.value })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Statut de commercialisation">
@@ -314,30 +466,43 @@ function AgencyPropertyDetailRoute() {
                         .value as AgencyProperty["publicStatus"],
                     })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                 >
-                  {[
-                    "Disponible",
-                    "Nouveauté",
-                    "Exclusivité",
-                    "Sous offre",
-                    "Vendu",
-                    "Coup de cœur",
-                  ].map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {publicStatusOptions.map((status) => (
+                    <option key={status.value} value={status.value}>
+                      {status.label}
                     </option>
                   ))}
                 </select>
               </Field>
+              <Field label="Publication">
+                <select
+                  value={property.isPublished ? "published" : "hidden"}
+                  onChange={(event) =>
+                    setProperty({
+                      ...property,
+                      isPublished: event.target.value === "published",
+                    })
+                  }
+                  disabled={!canEdit}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  <option value="published">Visible publiquement</option>
+                  <option value="hidden">Masqué du site public</option>
+                </select>
+              </Field>
               <Field label="Adresse ou quartier">
                 <Input
-                  value={property.address}
+                  value={property.addressOrDistrict || property.address}
                   onChange={(event) =>
-                    setProperty({ ...property, address: event.target.value })
+                    setProperty({
+                      ...property,
+                      address: event.target.value,
+                      addressOrDistrict: event.target.value,
+                    })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Surface">
@@ -346,7 +511,7 @@ function AgencyPropertyDetailRoute() {
                   onChange={(event) =>
                     setProperty({ ...property, surface: event.target.value })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Pièces">
@@ -355,7 +520,16 @@ function AgencyPropertyDetailRoute() {
                   onChange={(event) =>
                     setProperty({ ...property, rooms: event.target.value })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
+                />
+              </Field>
+              <Field label="Chambres">
+                <Input
+                  value={property.bedrooms}
+                  onChange={(event) =>
+                    setProperty({ ...property, bedrooms: event.target.value })
+                  }
+                  disabled={!canEdit}
                 />
               </Field>
               <Field label="Description" className="md:col-span-2">
@@ -367,7 +541,7 @@ function AgencyPropertyDetailRoute() {
                       description: event.target.value,
                     })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   className="min-h-28"
                 />
               </Field>
@@ -375,10 +549,12 @@ function AgencyPropertyDetailRoute() {
                 <Button
                   className="rounded-full"
                   size="lg"
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit || saving}
                 >
                   <Save className="h-4 w-4" />
-                  Enregistrer les informations
+                  {saving
+                    ? "Enregistrement..."
+                    : "Enregistrer les informations"}
                 </Button>
               </div>
             </form>
@@ -392,85 +568,369 @@ function AgencyPropertyDetailRoute() {
               description="Mandat, annonce, visites, offre, compromis, vente."
             />
             <div className="mt-6 grid gap-3 sm:grid-cols-2">
-              {agencyConfig.saleProgress.slice(0, 6).map((step) => (
+              {progressSteps.map((step) => (
                 <button
                   key={step}
                   type="button"
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   className={`rounded-2xl border p-4 text-left text-sm transition ${
-                    property.internalStatus === step
+                    property.internalProgress === step
                       ? "border-primary bg-primary text-primary-foreground"
                       : "border-[#e8e0d5] bg-[#fffdf9] text-primary/65"
                   }`}
                   onClick={() => {
-                    const nextProperty = { ...property, internalStatus: step };
-                    updateProperty(nextProperty);
-                    setFeedback("Progression enregistrée.");
+                    const nextProperty = {
+                      ...property,
+                      internalProgress: step,
+                      internalStatus: internalProgressLabel(step),
+                    };
+                    updateProperty(nextProperty, "Progression enregistrée.");
                   }}
                 >
-                  {step}
+                  {internalProgressLabel(step)}
                 </button>
               ))}
             </div>
           </SaasCard>
 
-          <div className="space-y-7">
-            <SaasCard className="p-6 md:p-8">
-              <CalendarDays className="h-5 w-5 text-primary/45" />
-              <h2 className="mt-5 font-display text-3xl">Visites</h2>
-              <Field label="Prochaine visite" className="mt-5">
-                <Input
-                  value={property.nextVisit}
-                  onChange={(event) =>
-                    setProperty({ ...property, nextVisit: event.target.value })
-                  }
-                  disabled={agency.status !== "active"}
-                />
-              </Field>
-              <Button
-                type="button"
-                className="mt-5 rounded-full"
-                disabled={agency.status !== "active"}
-                onClick={() => {
-                  updateProperty(property);
-                  setFeedback("Prochaine visite enregistrée.");
-                }}
-              >
-                Enregistrer la visite
-              </Button>
-            </SaasCard>
+          <SaasCard className="p-6 md:p-8">
+            <SectionTitle title="Caractéristiques essentielles" />
+            <div className="mt-6 grid gap-3 sm:grid-cols-2">
+              <Info label="Surface" value={property.surface} />
+              <Info label="Pièces" value={property.rooms} />
+              <Info
+                label="Adresse ou quartier"
+                value={property.addressOrDistrict || property.address}
+              />
+              <Info
+                label="Étape en cours"
+                value={internalProgressLabel(
+                  progressSteps[currentProgressIndex] ?? "published",
+                )}
+              />
+            </div>
+          </SaasCard>
+        </div>
 
-            <SaasCard className="p-6 md:p-8">
-              <Clipboard className="h-5 w-5 text-primary/45" />
-              <h2 className="mt-5 font-display text-3xl">Compte rendu</h2>
-              <Textarea
-                value={property.report}
+        <SaasCard className="mt-7 p-6 md:p-8">
+          <SectionTitle
+            title="Photos"
+            description="La photo principale alimente la page publique et l’espace vendeur."
+          />
+          <form
+            className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
+            onSubmit={onAddPhoto}
+          >
+            <Input
+              value={photoForm.url}
+              onChange={(event) =>
+                setPhotoForm({ ...photoForm, url: event.target.value })
+              }
+              placeholder="URL de la photo"
+              disabled={!canEdit}
+            />
+            <Input
+              value={photoForm.alt}
+              onChange={(event) =>
+                setPhotoForm({ ...photoForm, alt: event.target.value })
+              }
+              placeholder="Description"
+              disabled={!canEdit}
+            />
+            <Button className="rounded-full" disabled={!canEdit}>
+              <ImagePlus className="h-4 w-4" />
+              Ajouter
+            </Button>
+          </form>
+          <div className="mt-6 grid gap-4 md:grid-cols-3">
+            {property.photos.map((photo) => (
+              <div
+                key={photo.id}
+                className="overflow-hidden rounded-[22px] border border-[#e8e0d5] bg-[#fffdf9]"
+              >
+                <img
+                  src={photo.url}
+                  alt={photo.alt}
+                  className="h-40 w-full object-cover"
+                />
+                <div className="space-y-3 p-4">
+                  <div className="text-sm font-medium">
+                    {photo.isMain ? "Photo principale" : photo.alt}
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {!photo.isMain && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full bg-white"
+                        disabled={!canEdit}
+                        onClick={() =>
+                          setProperty(setMainPropertyPhoto(property, photo.id))
+                        }
+                      >
+                        Définir principale
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(deletePropertyPhoto(property, photo.id))
+                      }
+                    >
+                      <Trash2 className="h-4 w-4" />
+                      Supprimer
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SaasCard>
+
+        <div className="mt-7 grid gap-7 lg:grid-cols-2">
+          <SaasCard className="p-6 md:p-8">
+            <SectionTitle
+              title="Visites"
+              description="Planifiez les visites et gardez un historique clair."
+            />
+            <form
+              className="mt-5 grid gap-3 sm:grid-cols-2"
+              onSubmit={onAddVisit}
+            >
+              <Input
+                type="date"
+                value={visitForm.date}
                 onChange={(event) =>
-                  setProperty({ ...property, report: event.target.value })
+                  setVisitForm({ ...visitForm, date: event.target.value })
                 }
-                disabled={agency.status !== "active"}
-                className="mt-5 min-h-32"
+                disabled={!canEdit}
+                required
+              />
+              <Input
+                type="time"
+                value={visitForm.time}
+                onChange={(event) =>
+                  setVisitForm({ ...visitForm, time: event.target.value })
+                }
+                disabled={!canEdit}
+              />
+              <Input
+                value={visitForm.visitorName}
+                onChange={(event) =>
+                  setVisitForm({
+                    ...visitForm,
+                    visitorName: event.target.value,
+                  })
+                }
+                placeholder="Nom du visiteur"
+                disabled={!canEdit}
+              />
+              <Input
+                value={visitForm.visitorPhone}
+                onChange={(event) =>
+                  setVisitForm({
+                    ...visitForm,
+                    visitorPhone: event.target.value,
+                  })
+                }
+                placeholder="Téléphone"
+                disabled={!canEdit}
+              />
+              <Textarea
+                value={visitForm.note}
+                onChange={(event) =>
+                  setVisitForm({ ...visitForm, note: event.target.value })
+                }
+                placeholder="Informations importantes"
+                disabled={!canEdit}
+                className="sm:col-span-2"
               />
               <Button
-                type="button"
-                className="mt-5 rounded-full"
-                disabled={agency.status !== "active"}
-                onClick={() => {
-                  updateProperty(property);
-                  setFeedback("Compte rendu enregistré.");
-                }}
+                className="rounded-full sm:col-span-2"
+                disabled={!canEdit}
               >
-                Ajouter un compte rendu
+                <CalendarDays className="h-4 w-4" />
+                Ajouter la visite
               </Button>
-            </SaasCard>
-          </div>
+            </form>
+            <div className="mt-6 space-y-3">
+              {property.visits.length === 0 && (
+                <p className="text-sm text-primary/55">
+                  Aucune visite planifiée pour le moment.
+                </p>
+              )}
+              {property.visits.map((visit) => (
+                <div
+                  key={visit.id}
+                  className="rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">
+                      {visit.date} {visit.time && `à ${visit.time}`}
+                    </div>
+                    <StatusBadge
+                      status={
+                        visit.status === "done"
+                          ? "réalisée"
+                          : visit.status === "cancelled"
+                            ? "annulée"
+                            : "prévue"
+                      }
+                    />
+                  </div>
+                  <p className="mt-2 text-sm text-primary/55">
+                    {visit.visitorName || "Visiteur non renseigné"}
+                    {visit.visitorPhone ? ` - ${visit.visitorPhone}` : ""}
+                  </p>
+                  {visit.note && (
+                    <p className="mt-2 text-sm leading-relaxed text-primary/55">
+                      {visit.note}
+                    </p>
+                  )}
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(
+                          updatePropertyVisitStatus(property, visit.id, "done"),
+                        )
+                      }
+                    >
+                      Marquer réalisée
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(deletePropertyVisit(property, visit.id))
+                      }
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SaasCard>
+
+          <SaasCard className="p-6 md:p-8">
+            <SectionTitle
+              title="Comptes rendus"
+              description="Les comptes rendus visibles apparaissent dans Mon Suivi vendeur."
+            />
+            <form className="mt-5 space-y-3" onSubmit={onAddReport}>
+              <Input
+                value={reportForm.title}
+                onChange={(event) =>
+                  setReportForm({ ...reportForm, title: event.target.value })
+                }
+                placeholder="Titre"
+                disabled={!canEdit}
+              />
+              <Textarea
+                value={reportForm.content}
+                onChange={(event) =>
+                  setReportForm({ ...reportForm, content: event.target.value })
+                }
+                placeholder="Compte rendu de visite"
+                disabled={!canEdit}
+                className="min-h-28"
+                required
+              />
+              <label className="flex items-center gap-2 text-sm text-primary/60">
+                <input
+                  type="checkbox"
+                  checked={reportForm.visibleToSeller}
+                  onChange={(event) =>
+                    setReportForm({
+                      ...reportForm,
+                      visibleToSeller: event.target.checked,
+                    })
+                  }
+                  disabled={!canEdit}
+                />
+                Visible dans l’espace vendeur
+              </label>
+              <Button className="rounded-full" disabled={!canEdit}>
+                <Clipboard className="h-4 w-4" />
+                Ajouter le compte rendu
+              </Button>
+            </form>
+            <div className="mt-6 space-y-3">
+              {property.visitReports.length === 0 && (
+                <p className="text-sm text-primary/55">
+                  Aucun compte rendu pour le moment.
+                </p>
+              )}
+              {property.visitReports.map((report) => (
+                <div
+                  key={report.id}
+                  className="rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">{report.title}</div>
+                    <StatusBadge
+                      status={report.visibleToSeller ? "visible" : "interne"}
+                    />
+                  </div>
+                  <p className="mt-2 text-sm leading-relaxed text-primary/55">
+                    {report.content}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(
+                          updateVisitReportVisibility(
+                            property,
+                            report.id,
+                            !report.visibleToSeller,
+                          ),
+                        )
+                      }
+                    >
+                      {report.visibleToSeller ? "Masquer" : "Rendre visible"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(deleteVisitReport(property, report.id))
+                      }
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SaasCard>
         </div>
 
         <div className="mt-7 grid gap-7 lg:grid-cols-2">
           <SaasCard className="p-6 md:p-8">
             <SectionTitle
               title="Vendeur"
-              description="Ces informations servent à envoyer l’invitation de création d’accès vendeur."
+              description="Ces informations servent uniquement à préparer l’invitation de création d’accès vendeur."
             />
             <form
               className="mt-5 grid gap-4 sm:grid-cols-2"
@@ -485,7 +945,7 @@ function AgencyPropertyDetailRoute() {
                       firstName: event.target.value,
                     })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   required
                 />
               </Field>
@@ -498,7 +958,7 @@ function AgencyPropertyDetailRoute() {
                       lastName: event.target.value,
                     })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   required
                 />
               </Field>
@@ -517,7 +977,7 @@ function AgencyPropertyDetailRoute() {
                     event.preventDefault();
                     setSellerError("Email invalide.");
                   }}
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   required
                 />
               </Field>
@@ -536,15 +996,11 @@ function AgencyPropertyDetailRoute() {
                       phone: event.target.value,
                     })
                   }
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                 />
               </Field>
               <div className="sm:col-span-2">
-                <Button
-                  className="rounded-full"
-                  size="lg"
-                  disabled={agency.status !== "active"}
-                >
+                <Button className="rounded-full" size="lg" disabled={!canEdit}>
                   <Mail className="h-4 w-4" />
                   {property.sellerToken
                     ? "Renvoyer l’invitation vendeur"
@@ -555,71 +1011,177 @@ function AgencyPropertyDetailRoute() {
           </SaasCard>
 
           <SaasCard className="p-6 md:p-8">
-            <SectionTitle title="Documents" />
-            <div className="mt-5 flex flex-wrap gap-2">
-              {property.documents.map((document) => (
-                <span
-                  key={document}
-                  className="rounded-full border border-[#e8e0d5] bg-[#fffdf9] px-4 py-2 text-sm text-primary/60"
-                >
-                  {document}
-                </span>
-              ))}
-            </div>
-            <form
-              className="mt-5 flex flex-col gap-3 sm:flex-row"
-              onSubmit={onAddDocument}
-            >
+            <SectionTitle
+              title="Documents"
+              description="Mandat, diagnostics, offre et compromis peuvent être rendus visibles au vendeur."
+            />
+            <form className="mt-5 grid gap-3" onSubmit={onAddDocument}>
               <Input
-                value={newDocument}
-                onChange={(event) => setNewDocument(event.target.value)}
-                placeholder="Ex : Offre"
-                disabled={agency.status !== "active"}
+                value={documentForm.name}
+                onChange={(event) =>
+                  setDocumentForm({
+                    ...documentForm,
+                    name: event.target.value,
+                  })
+                }
+                placeholder="Nom du document"
+                disabled={!canEdit}
+                required
               />
-              <Button
-                className="rounded-full"
-                disabled={agency.status !== "active"}
-              >
+              <div className="grid gap-3 sm:grid-cols-2">
+                <select
+                  value={documentForm.type}
+                  onChange={(event) =>
+                    setDocumentForm({
+                      ...documentForm,
+                      type: event.target.value as DocumentType,
+                    })
+                  }
+                  disabled={!canEdit}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm outline-none ring-offset-background transition focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                >
+                  {documentTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                <Input
+                  value={documentForm.url}
+                  onChange={(event) =>
+                    setDocumentForm({
+                      ...documentForm,
+                      url: event.target.value,
+                    })
+                  }
+                  placeholder="URL optionnelle"
+                  disabled={!canEdit}
+                />
+              </div>
+              <label className="flex items-center gap-2 text-sm text-primary/60">
+                <input
+                  type="checkbox"
+                  checked={documentForm.visibleToSeller}
+                  onChange={(event) =>
+                    setDocumentForm({
+                      ...documentForm,
+                      visibleToSeller: event.target.checked,
+                    })
+                  }
+                  disabled={!canEdit}
+                />
+                Visible dans l’espace vendeur
+              </label>
+              <Button className="rounded-full" disabled={!canEdit}>
                 <FileText className="h-4 w-4" />
                 Ajouter
               </Button>
             </form>
+            <div className="mt-6 space-y-3">
+              {property.propertyDocuments.length === 0 && (
+                <p className="text-sm text-primary/55">
+                  Aucun document ajouté pour le moment.
+                </p>
+              )}
+              {property.propertyDocuments.map((document) => (
+                <div
+                  key={document.id}
+                  className="rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="font-medium">{document.name}</div>
+                    <StatusBadge
+                      status={document.visibleToSeller ? "visible" : "interne"}
+                    />
+                  </div>
+                  <p className="mt-1 text-sm text-primary/50">
+                    {document.type}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {document.url && (
+                      <Button
+                        asChild
+                        size="sm"
+                        variant="outline"
+                        className="rounded-full bg-white"
+                      >
+                        <a href={document.url} target="_blank" rel="noreferrer">
+                          <ExternalLink className="h-4 w-4" />
+                          Ouvrir
+                        </a>
+                      </Button>
+                    )}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(
+                          updatePropertyDocumentVisibility(
+                            property,
+                            document.id,
+                            !document.visibleToSeller,
+                          ),
+                        )
+                      }
+                    >
+                      {document.visibleToSeller ? "Masquer" : "Rendre visible"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      disabled={!canEdit}
+                      onClick={() =>
+                        setProperty(
+                          deletePropertyDocument(property, document.id),
+                        )
+                      }
+                    >
+                      Supprimer
+                    </Button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </SaasCard>
         </div>
 
         <SaasCard className="mt-7 p-6 md:p-8">
           <SectionTitle
             title="Espace vendeur"
-            description="L’accès vendeur donne au propriétaire une vue claire sur la progression, les visites, les comptes rendus et les documents."
+            description="Le vendeur reçoit un lien d’invitation /creer-acces/[token], puis crée son accès privé."
           />
           {property.sellerToken ? (
             <div className="mt-6">
               <StatusBadge status="actif" />
               <p className="mt-4 text-sm leading-relaxed text-primary/60">
-                Espace vendeur créé
+                Espace vendeur créé.
               </p>
-              <div className="mt-4 break-all rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/60">
-                {getSellerAccessLink(property)}
-              </div>
               <div className="mt-5 flex flex-wrap gap-2">
                 <Button
                   type="button"
                   variant="outline"
                   className="rounded-full bg-white"
-                  disabled={agency.status !== "active"}
+                  disabled={!canEdit}
                   onClick={() => void onCreateSellerSpace()}
                 >
                   <Mail className="h-4 w-4" />
-                  Renvoyer l’invitation vendeur
+                  Renvoyer l’accès vendeur
                 </Button>
-                <Button
-                  type="button"
-                  className="rounded-full"
-                  onClick={onCopySellerLink}
-                >
-                  <Copy className="h-4 w-4" />
-                  Copier le lien vendeur
-                </Button>
+                {manualSellerInviteLink && (
+                  <Button
+                    type="button"
+                    className="rounded-full"
+                    onClick={onCopyManualSellerInviteLink}
+                  >
+                    <Copy className="h-4 w-4" />
+                    Copier le lien d’invitation
+                  </Button>
+                )}
               </div>
             </div>
           ) : (
@@ -630,7 +1192,7 @@ function AgencyPropertyDetailRoute() {
               <Button
                 type="button"
                 className="mt-5 rounded-full"
-                disabled={agency.status !== "active"}
+                disabled={!canEdit}
                 onClick={() => void onCreateSellerSpace()}
               >
                 <Link2 className="h-4 w-4" />

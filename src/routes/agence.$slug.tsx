@@ -35,6 +35,10 @@ import {
   getAgencyProperties,
   getAgents,
   getManagers,
+  getVisitRequestsByAgency,
+  internalProgressLabel,
+  leadStatusLabel,
+  publicStatusLabel,
   saveAgencyProperty,
   type Agency,
   type AgencyProperty,
@@ -98,6 +102,7 @@ function AgencyPortal({ slug }: { slug: string }) {
   const isDemo = agency.status === "demo";
   const isDisabled = agency.status === "disabled";
   const leads = getAgencyLeads(agency.slug);
+  const visitRequests = getVisitRequestsByAgency(agency.id);
   const managers = getManagers(agency.id);
   const agents = getAgents(agency.id);
 
@@ -133,7 +138,7 @@ function AgencyPortal({ slug }: { slug: string }) {
           <StatusMessage text="Votre portail est actuellement désactivé. Contactez Signature Immobilier pour le réactiver." />
         )}
 
-        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <NavCard
             icon={Home}
             title="Biens"
@@ -145,6 +150,14 @@ function AgencyPortal({ slug }: { slug: string }) {
             title="Estimations"
             value={`${leads.length}`}
             to={`/agence/${agency.slug}/estimations`}
+            disabled={!isActive}
+            onLocked={() => setLockedOpen(true)}
+          />
+          <NavCard
+            icon={CalendarDays}
+            title="Visites"
+            value={`${visitRequests.length}`}
+            to={`/agence/${agency.slug}/demandes-visites`}
             disabled={!isActive}
             onLocked={() => setLockedOpen(true)}
           />
@@ -217,7 +230,7 @@ function AgencyPortal({ slug }: { slug: string }) {
           </div>
         </SaasCard>
 
-        <div className="mt-7 grid gap-7 lg:grid-cols-2">
+        <div className="mt-7 grid gap-7 lg:grid-cols-3">
           <SaasCard className="p-6 md:p-8">
             <SectionTitle
               title="Demandes d’estimation"
@@ -261,7 +274,7 @@ function AgencyPortal({ slug }: { slug: string }) {
                     <div className="font-medium">
                       {lead.firstName} {lead.lastName}
                     </div>
-                    <StatusBadge status={lead.status} />
+                    <StatusBadge status={leadStatusLabel(lead.status)} />
                   </div>
                   <div className="mt-2 text-sm text-primary/55">
                     {lead.propertyType} — {lead.propertyCity}
@@ -271,6 +284,64 @@ function AgencyPortal({ slug }: { slug: string }) {
               {(!isActive || leads.length === 0) && (
                 <p className="text-sm text-primary/55">
                   Aucune demande d’estimation pour le moment.
+                </p>
+              )}
+            </div>
+          </SaasCard>
+
+          <SaasCard className="p-6 md:p-8">
+            <SectionTitle
+              title="Demandes de visite"
+              description={
+                isActive
+                  ? "Les demandes acheteurs issues des annonces publiques arrivent ici."
+                  : "Version démo aujourd’hui. Portail complet après activation."
+              }
+              action={
+                <Button
+                  asChild={isActive}
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={isActive ? undefined : () => setLockedOpen(true)}
+                >
+                  {isActive ? (
+                    <Link
+                      to="/agence/$slug/demandes-visites"
+                      params={{ slug: agency.slug }}
+                    >
+                      Voir les demandes
+                      <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  ) : (
+                    <>
+                      Voir les demandes
+                      <ArrowRight className="h-4 w-4" />
+                    </>
+                  )}
+                </Button>
+              }
+            />
+            <div className="mt-6 space-y-3">
+              {(isActive ? visitRequests.slice(0, 3) : []).map((request) => (
+                <div
+                  key={request.id}
+                  className="rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] p-4"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="font-medium">
+                      {request.firstName} {request.lastName}
+                    </div>
+                    <StatusBadge status={leadStatusLabel(request.status)} />
+                  </div>
+                  <div className="mt-2 text-sm text-primary/55">
+                    {request.propertyTitle} — {request.propertyCity}
+                  </div>
+                </div>
+              ))}
+              {(!isActive || visitRequests.length === 0) && (
+                <p className="text-sm text-primary/55">
+                  Aucune demande de visite pour le moment.
                 </p>
               )}
             </div>
@@ -378,29 +449,72 @@ function CreatePropertyForm({
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const fallbackImage = agencyConfig.properties[0].coverImage;
+    const now = new Date().toISOString();
+    const propertyId = `property-${Date.now()}`;
     const nextProperties = saveAgencyProperty({
-      id: `property-${Date.now()}`,
+      id: propertyId,
       agencyId: agency.id,
+      agencySlug: agency.slug,
       title: form.title,
       type: form.type,
       city: form.city,
       address: form.address,
+      addressOrDistrict: form.address,
       price: form.price,
       surface: form.surface,
       rooms: form.rooms,
       bedrooms: form.bedrooms,
-      publicStatus: "Nouveauté",
+      publicStatus: "new",
+      internalProgress: "published",
       internalStatus: "Annonce publiée",
+      isPublished: true,
       nextVisit: "À planifier",
       report: "Aucun compte rendu de visite disponible pour le moment.",
       description: form.description,
-      image: agencyConfig.properties[0].coverImage,
+      image: fallbackImage,
+      imageUrl: fallbackImage,
+      photos: [
+        {
+          id: `photo-${Date.now()}`,
+          propertyId,
+          url: fallbackImage,
+          alt: form.title,
+          isMain: true,
+          order: 1,
+          createdAt: now,
+        },
+      ],
       sellerToken: "",
       sellerFirstName: "",
       sellerLastName: "",
       sellerEmail: "",
       sellerPhone: "",
       documents: ["Mandat", "Diagnostics"],
+      propertyDocuments: [
+        {
+          id: `document-${Date.now()}-mandat`,
+          propertyId,
+          name: "Mandat",
+          type: "Mandat",
+          url: "",
+          visibleToSeller: false,
+          createdAt: now,
+        },
+        {
+          id: `document-${Date.now()}-diagnostics`,
+          propertyId,
+          name: "Diagnostics",
+          type: "Diagnostics",
+          url: "",
+          visibleToSeller: false,
+          createdAt: now,
+        },
+      ],
+      visits: [],
+      visitReports: [],
+      createdAt: now,
+      updatedAt: now,
     });
     onCreated(nextProperties);
   }
@@ -500,16 +614,20 @@ function PropertyCard({
   isActive: boolean;
   onLocked: () => void;
 }) {
+  const badge = publicStatusLabel(property.publicStatus);
+  const image = property.imageUrl || property.image;
+
   return (
     <div className="overflow-hidden rounded-[24px] border border-[#e8e0d5] bg-[#fffdf9]">
       <img
-        src={property.image}
+        src={image}
         alt={property.title}
         className="h-56 w-full object-cover"
       />
       <div className="p-5">
         <div className="flex flex-wrap items-center gap-2">
-          <StatusBadge status={property.publicStatus} />
+          {badge && <StatusBadge status={badge} />}
+          <StatusBadge status={property.isPublished ? "publié" : "masqué"} />
           <span className="text-sm text-primary/45">{property.city}</span>
         </div>
         <h3 className="mt-4 font-display text-3xl leading-tight">
@@ -520,6 +638,9 @@ function PropertyCard({
         </p>
         <p className="mt-4 text-sm leading-relaxed text-primary/55">
           {property.description}
+        </p>
+        <p className="mt-3 text-xs font-medium uppercase tracking-[0.16em] text-primary/35">
+          {internalProgressLabel(property.internalProgress)}
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           {isActive ? (

@@ -52,6 +52,7 @@ export function AgencyTeamManager({
   const [agents, setAgents] = useState<TeamMember[]>([]);
   const [feedback, setFeedback] = useState("");
   const [manualInviteLink, setManualInviteLink] = useState("");
+  const [manualInviteMailto, setManualInviteMailto] = useState("");
   const [manualInviteCopied, setManualInviteCopied] = useState(false);
 
   useEffect(() => {
@@ -86,6 +87,7 @@ export function AgencyTeamManager({
     const agency = getAgencyById(agencyId);
     if (!agency) {
       setManualInviteLink("");
+      setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback("Agence introuvable.");
       return;
@@ -100,12 +102,14 @@ export function AgencyTeamManager({
 
     if (result.sent) {
       setManualInviteLink("");
+      setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback(`${successPrefix}. Email d’invitation envoyé.`);
       return;
     }
 
     setManualInviteLink(email.accessUrl ?? "");
+    setManualInviteMailto(email.mailtoHref);
     setManualInviteCopied(false);
     setFeedback(
       `${successPrefix}. Invitation créée. Email non envoyé : configuration email manquante.`,
@@ -136,6 +140,7 @@ export function AgencyTeamManager({
     if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
     refresh();
@@ -144,6 +149,7 @@ export function AgencyTeamManager({
   function onDisable(member: TeamMember) {
     disableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(
       member.role === "manager" ? "Patron désactivé." : "Agent désactivé.",
@@ -154,6 +160,7 @@ export function AgencyTeamManager({
   function onEnable(member: TeamMember) {
     enableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(
       member.role === "manager" ? "Patron réactivé." : "Agent réactivé.",
@@ -191,6 +198,18 @@ export function AgencyTeamManager({
                   <ExternalLink className="h-4 w-4" />
                   Ouvrir le lien
                 </Button>
+                {manualInviteMailto && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="rounded-full bg-white"
+                  >
+                    <a href={manualInviteMailto}>
+                      <Mail className="h-4 w-4" />
+                      Préparer un email manuel
+                    </a>
+                  </Button>
+                )}
               </div>
               {manualInviteCopied && (
                 <div className="mt-2 text-sm font-medium">Lien copié.</div>

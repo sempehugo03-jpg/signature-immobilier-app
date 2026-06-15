@@ -15,6 +15,7 @@ import { sendLeadNotificationEmail } from "@/lib/api/agency-email.functions";
 import {
   buildLeadEmail,
   getAgencyBySlug,
+  getAgencyNotificationRecipients,
   saveAgencyLead,
   type Agency,
   type AgencyLead,
@@ -29,7 +30,18 @@ export const Route = createFileRoute("/agence/$slug/estimation")({
 
 type LeadForm = Omit<
   AgencyLead,
-  "id" | "agencySlug" | "agencyName" | "createdAt" | "status"
+  | "id"
+  | "agencyId"
+  | "agencySlug"
+  | "agencyName"
+  | "propertyAddress"
+  | "estimatedRangeMin"
+  | "estimatedRangeMax"
+  | "message"
+  | "assignedAgentId"
+  | "createdAt"
+  | "updatedAt"
+  | "status"
 >;
 
 const initialForm: LeadForm = {
@@ -92,15 +104,17 @@ function AgencyEstimationRoute() {
           `Extérieur : ${form.exterior || "Non renseigné"}`,
           `Garage / parking : ${form.parking || "Non renseigné"}`,
         ].join("\n"),
+      agencyId: agency.id,
       agencySlug: agency.slug,
       agencyName: agency.name,
     });
     const email = buildLeadEmail(agency, lead);
+    const recipients = getAgencyNotificationRecipients(agency);
 
     try {
       await sendLeadNotificationEmail({
         data: {
-          to: email.to,
+          to: recipients.length ? recipients : email.to,
           subject: email.subject,
           body: email.body,
         },
@@ -141,7 +155,11 @@ function AgencyEstimationRoute() {
       />
 
       <section className="mx-auto max-w-4xl px-5 pb-16 md:px-8">
-        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
+        <Button
+          asChild
+          variant="outline"
+          className="mb-7 rounded-full bg-white"
+        >
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour au portail

@@ -491,7 +491,7 @@ function AdminAgencyRoute() {
                         variant="outline"
                         className="rounded-full bg-white"
                       >
-                        <a href={email.mailtoHref}>Ouvrir l’application mail</a>
+                        <a href={email.mailtoHref}>Préparer un email manuel</a>
                       </Button>
                     </div>
                   </div>
