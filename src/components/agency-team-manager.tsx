@@ -40,6 +40,8 @@ type SendInviteResult = {
 type PreparedInvite = ReturnType<typeof createTeamMemberInviteEmail>;
 
 const INVITE_EMAIL_TIMEOUT_MS = 8000;
+const MANAGER_INVITE_READY_FEEDBACK =
+  "Invitation prête. Un email prérempli a été ouvert pour envoi manuel.";
 
 export function AgencyTeamManager({
   agencyId,
@@ -167,6 +169,27 @@ export function AgencyTeamManager({
       token: getTokenFromInviteUrl(inviteUrl),
       inviteUrl,
     });
+
+    if (member.role === "manager") {
+      const managerInviteInput = {
+        recipientEmail: member.email,
+        firstName: member.firstName,
+        agencyName: agency.name,
+        inviteUrl,
+      };
+      const mailtoHref = createManagerInviteMailtoUrl(managerInviteInput);
+      setManualInviteMailto(mailtoHref);
+      setFeedback(MANAGER_INVITE_READY_FEEDBACK);
+      openManagerInviteMailClient(managerInviteInput);
+      logInviteDebug("invite_email_result", {
+        memberId: member.id,
+        role: member.role,
+        emailSent: false,
+        reason: "manual_mailto_opened",
+        inviteUrl,
+      });
+      return true;
+    }
 
     const result = await deliverInviteEmail({
       accessUrl: inviteUrl,
@@ -378,6 +401,77 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 
 function getInviteFallbackFeedback(successPrefix: string) {
   return `${successPrefix}. Email non envoyé : configuration email manquante. Vous pouvez copier le lien ou préparer un email manuel.`;
+}
+
+function openManagerInviteMailClient({
+  recipientEmail,
+  firstName,
+  agencyName,
+  inviteUrl,
+}: {
+  recipientEmail: string;
+  firstName: string;
+  agencyName: string;
+  inviteUrl: string;
+}) {
+  const mailtoUrl = createManagerInviteMailtoUrl({
+    recipientEmail,
+    firstName,
+    agencyName,
+    inviteUrl,
+  });
+
+  window.location.href = mailtoUrl;
+}
+
+function createManagerInviteMailtoUrl({
+  recipientEmail,
+  firstName,
+  agencyName,
+  inviteUrl,
+}: {
+  recipientEmail: string;
+  firstName: string;
+  agencyName: string;
+  inviteUrl: string;
+}) {
+  const subject = "Créez votre accès Signature Immobilier";
+  const body = buildManagerInviteMailBody({
+    firstName,
+    agencyName,
+    inviteUrl,
+  });
+
+  return `mailto:${recipientEmail.trim()}?subject=${encodeURIComponent(
+    subject,
+  )}&body=${encodeURIComponent(body)}`;
+}
+
+function buildManagerInviteMailBody({
+  firstName,
+  agencyName,
+  inviteUrl,
+}: {
+  firstName: string;
+  agencyName: string;
+  inviteUrl: string;
+}) {
+  const recipientName = firstName.trim();
+  const agency = agencyName.trim() || "votre agence";
+
+  return [
+    recipientName ? `Bonjour ${recipientName},` : "Bonjour,",
+    "",
+    `Vous avez été ajouté comme gérant du portail Signature Immobilier de ${agency}.`,
+    "",
+    "Créez votre accès ici :",
+    inviteUrl,
+    "",
+    "Depuis votre espace, vous pourrez gérer votre agence, vos biens, vos agents, vos demandes d’estimation et les espaces vendeurs.",
+    "",
+    "À bientôt,",
+    "Signature Immobilier",
+  ].join("\n");
 }
 
 function getTokenFromInviteUrl(inviteUrl: string) {
