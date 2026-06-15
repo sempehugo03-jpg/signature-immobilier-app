@@ -1,6 +1,7 @@
 import {
   Copy,
   ExternalLink,
+  Link2,
   Mail,
   RotateCcw,
   Trash2,
@@ -34,7 +35,9 @@ import {
 } from "@/lib/invite-email";
 import {
   createSharedTeamMemberInviteEmail,
+  getInviteCreationErrorMessage,
   getSharedInviteStorageWarning,
+  logInviteCreationFailure,
   type SharedInviteEmailResult,
 } from "@/lib/shared-invites";
 
@@ -50,9 +53,11 @@ type SendInviteResult = {
 
 type PreparedInvite = SharedInviteEmailResult;
 
+type InvitePreparationResult = { ok: true } | { ok: false; message: string };
+
 const INVITE_EMAIL_TIMEOUT_MS = 8000;
 const MANAGER_INVITE_READY_FEEDBACK =
-  "Invitation prête. Le lien peut être envoyé au destinataire.";
+  "Invitation prête. Le lien peut être envoyé au patron.";
 
 export function AgencyTeamManager({
   agencyId,
@@ -77,6 +82,13 @@ export function AgencyTeamManager({
     refresh();
   }, [agencyId]);
 
+  function clearManualInviteState() {
+    setManualInviteLink("");
+    setManualInviteGmail("");
+    setManualInviteMailto("");
+    setManualInviteCopied(false);
+  }
+
   function refresh() {
     setManagers(getManagers(agencyId));
     setAgents(getAgents(agencyId));
@@ -84,6 +96,20 @@ export function AgencyTeamManager({
   }
 
   async function onAdd(role: TeamRole, data: MemberFormData) {
+    const agency = getAgencyById(agencyId);
+    if (!agency) {
+      const message =
+        "Impossible de créer le lien d’invitation : agence introuvable.";
+      clearManualInviteState();
+      setFeedback(message);
+      throw new MemberInviteUiError(message);
+    }
+    if (!isValidEmail(data.email)) {
+      clearManualInviteState();
+      setFeedback("Email invalide.");
+      throw new MemberInviteUiError("Email invalide.");
+    }
+
     let member: TeamMember;
     try {
       member = addTeamMember(agencyId, {
@@ -98,10 +124,7 @@ export function AgencyTeamManager({
       });
     } catch (error) {
       console.info("Membre non créé", error);
-      setManualInviteLink("");
-      setManualInviteGmail("");
-      setManualInviteMailto("");
-      setManualInviteCopied(false);
+      clearManualInviteState();
       setFeedback(
         role === "manager"
           ? "Impossible d’ajouter ce patron. Vérifiez les informations puis réessayez."
@@ -114,66 +137,71 @@ export function AgencyTeamManager({
       member,
       role === "manager" ? "Patron ajouté" : "Agent ajouté",
     );
+
+    if (!inviteReady.ok) {
+      deleteTeamMember(member.id);
+      refresh();
+      setFeedback(
+        role === "manager"
+          ? `Patron non ajouté. ${inviteReady.message}`
+          : `Agent non ajouté. ${inviteReady.message}`,
+      );
+      throw new MemberInviteUiError(inviteReady.message);
+    }
+
     try {
       refresh();
     } catch (error) {
       console.info("Liste équipe non rafraîchie automatiquement", error);
     }
-
-    if (!inviteReady) {
-      throw new Error("INVITE_PREPARATION_FAILED");
-    }
   }
 
   async function onResend(member: TeamMember) {
-    await sendInvitation(member, "Invitation renvoyée");
-    refresh();
+    const result = await sendInvitation(member, "Invitation renvoyée");
+    if (result.ok) refresh();
+  }
+
+  async function onGenerateInviteLink(member: TeamMember) {
+    const result = await sendInvitation(member, "Invitation prête");
+    if (result.ok) refresh();
   }
 
   async function sendInvitation(
     member: TeamMember,
     successPrefix: string,
-  ): Promise<boolean> {
+  ): Promise<InvitePreparationResult> {
     const agency = getAgencyById(agencyId);
     if (!agency) {
-      setManualInviteLink("");
-      setManualInviteGmail("");
-      setManualInviteMailto("");
-      setManualInviteCopied(false);
-      setFeedback("Agence introuvable.");
-      return false;
+      const message =
+        "Impossible de créer le lien d’invitation : agence introuvable.";
+      clearManualInviteState();
+      setFeedback(message);
+      return { ok: false, message };
     }
 
     let email: PreparedInvite;
     try {
       email = await createSharedTeamMemberInviteEmail(agency, member);
     } catch (error) {
-      console.info("Lien d’invitation non préparé", error);
-      setManualInviteLink("");
-      setManualInviteGmail("");
-      setManualInviteMailto("");
-      setManualInviteCopied(false);
-      setFeedback(
-        `${successPrefix}. Invitation non préparée. Vérifiez les informations puis réessayez.`,
-      );
-      return false;
+      logInviteCreationFailure(error);
+      const message = getInviteCreationErrorMessage(error);
+      clearManualInviteState();
+      setFeedback(message);
+      return { ok: false, message };
     }
 
     const inviteUrl = email.email.accessUrl ?? "";
     const storageWarning = getSharedInviteStorageWarning(email.persistedIn);
     if (!inviteUrl) {
-      setManualInviteLink("");
-      setManualInviteGmail("");
-      setManualInviteMailto("");
-      setManualInviteCopied(false);
-      setFeedback(
-        `${successPrefix}. Invitation non préparée. Vérifiez les informations puis réessayez.`,
-      );
+      const message =
+        "Impossible de créer le lien d’invitation. Consultez la console pour le détail.";
+      clearManualInviteState();
+      setFeedback(message);
       logInviteDebug("invite_url_missing", {
         memberId: member.id,
         role: member.role,
       });
-      return false;
+      return { ok: false, message };
     }
 
     setManualInviteLink(inviteUrl);
@@ -214,7 +242,7 @@ export function AgencyTeamManager({
         reason: "manual_send_choice_ready",
         inviteUrl,
       });
-      return true;
+      return { ok: true };
     }
 
     const result = await deliverInviteEmail({
@@ -238,14 +266,14 @@ export function AgencyTeamManager({
       setFeedback(
         `${successPrefix}. Email d’invitation envoyé.${storageWarning}`,
       );
-      return true;
+      return { ok: true };
     }
 
     setManualInviteGmail("");
     setManualInviteMailto(email.email.mailtoHref);
     setManualInviteCopied(false);
     setFeedback(`${getInviteFallbackFeedback(successPrefix)}${storageWarning}`);
-    return true;
+    return { ok: true };
   }
 
   async function onCopyManualInviteLink() {
@@ -384,6 +412,7 @@ export function AgencyTeamManager({
           onDisable={onDisable}
           onEnable={onEnable}
           onResend={onResend}
+          onGenerateInviteLink={onGenerateInviteLink}
         />
         <TeamColumn
           title="Agents"
@@ -395,6 +424,7 @@ export function AgencyTeamManager({
           onDisable={onDisable}
           onEnable={onEnable}
           onResend={onResend}
+          onGenerateInviteLink={onGenerateInviteLink}
         />
       </div>
     </div>
@@ -476,6 +506,7 @@ function TeamColumn({
   onDisable,
   onEnable,
   onResend,
+  onGenerateInviteLink,
 }: {
   title: string;
   empty: string;
@@ -486,6 +517,7 @@ function TeamColumn({
   onDisable: (member: TeamMember) => void;
   onEnable: (member: TeamMember) => void;
   onResend: (member: TeamMember) => void;
+  onGenerateInviteLink: (member: TeamMember) => void;
 }) {
   const noun = role === "manager" ? "patron" : "agent";
 
@@ -557,6 +589,17 @@ function TeamColumn({
                 <Mail className="h-4 w-4" />
                 Renvoyer l’invitation
               </Button>
+              {member.status === "invited" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={() => onGenerateInviteLink(member)}
+                >
+                  <Link2 className="h-4 w-4" />
+                  Générer un lien d’invitation
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="outline"
@@ -604,7 +647,7 @@ function AddMemberForm({
       setError("");
     } catch (error) {
       console.info("Ajout du membre non finalisé", error);
-      setError("Impossible de finaliser l’invitation. Réessayez.");
+      setError(getMemberInviteErrorMessage(error));
     } finally {
       setSubmitting(false);
     }
@@ -668,4 +711,19 @@ function getMemberStatusLabel(status: TeamMember["status"]) {
   if (status === "active") return "actif";
   if (status === "invited") return "invité";
   return "désactivé";
+}
+
+class MemberInviteUiError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "MemberInviteUiError";
+  }
+}
+
+function getMemberInviteErrorMessage(error: unknown) {
+  if (error instanceof MemberInviteUiError && error.message) {
+    return error.message;
+  }
+
+  return "Impossible de créer le lien d’invitation. Consultez la console pour le détail.";
 }

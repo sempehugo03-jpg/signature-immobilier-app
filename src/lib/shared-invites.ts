@@ -35,9 +35,23 @@ import {
 type ApiReadInviteStatus = InviteTokenStatus | "invalid";
 
 type CreateInviteApiResponse = {
+  ok?: true;
   token: string;
   inviteUrl: string;
   record: InviteTokenRecord;
+};
+
+export type InviteCreationErrorCode =
+  | "missing_supabase"
+  | "missing_table"
+  | "missing_agency"
+  | "invalid_email"
+  | "unknown_error";
+
+type CreateInviteApiErrorResponse = {
+  ok: false;
+  code: InviteCreationErrorCode;
+  message: string;
 };
 
 type ReadInviteApiResponse = {
@@ -72,19 +86,60 @@ export type CompletedInviteAccessLookup = InviteAccessLookup & {
   redirectPath?: string;
 };
 
+const inviteCreationErrorMessages: Record<InviteCreationErrorCode, string> = {
+  missing_supabase:
+    "Impossible de créer le lien d’invitation : base de données non configurée.",
+  missing_table:
+    "Impossible de créer le lien d’invitation : table invite_tokens absente.",
+  missing_agency:
+    "Impossible de créer le lien d’invitation : agence introuvable.",
+  invalid_email: "Email invalide.",
+  unknown_error:
+    "Impossible de créer le lien d’invitation. Consultez la console pour le détail.",
+};
+
+export class InviteCreationError extends Error {
+  code: InviteCreationErrorCode;
+  cause?: unknown;
+
+  constructor(
+    code: InviteCreationErrorCode,
+    message = inviteCreationErrorMessages[code],
+    cause?: unknown,
+  ) {
+    super(message);
+    this.name = "InviteCreationError";
+    this.code = code;
+    this.cause = cause;
+  }
+}
+
+export function getInviteCreationErrorMessage(error: unknown) {
+  if (error instanceof InviteCreationError) {
+    return error.message || inviteCreationErrorMessages[error.code];
+  }
+
+  return inviteCreationErrorMessages.unknown_error;
+}
+
+export function logInviteCreationFailure(error: unknown) {
+  if (import.meta.env.DEV) {
+    console.error("Invite creation failed", error);
+  }
+}
+
 export async function createSharedTeamMemberInviteEmail(
   agency: Agency,
   member: TeamMember,
 ): Promise<SharedInviteEmailResult> {
-  const response = await createInviteTokenViaApi({
-    type: member.role === "manager" ? "manager_invite" : "agent_invite",
-    agencyId: agency.id,
-    agencySlug: agency.slug,
-    teamMemberId: member.id,
-    email: member.email,
-  });
-
-  if (response) {
+  try {
+    const response = await createInviteTokenViaApi({
+      type: member.role === "manager" ? "manager_invite" : "agent_invite",
+      agencyId: agency.id,
+      agencySlug: agency.slug,
+      teamMemberId: member.id,
+      email: member.email,
+    });
     const access = accessFromInviteRecord(response.record);
     return {
       email:
@@ -94,9 +149,10 @@ export async function createSharedTeamMemberInviteEmail(
       persistedIn: "supabase",
       sharedRecord: response.record,
     };
+  } catch (error) {
+    if (!canUseDevLocalInviteFallback(error)) throw error;
   }
 
-  ensureDevLocalFallbackAllowed();
   return {
     email: createTeamMemberInviteEmail(agency, member),
     persistedIn: "local",
@@ -119,16 +175,15 @@ export async function createSharedSellerInviteForProperty(
       sellerPhone: seller.phone.trim(),
     }).find((item) => item.id === property.id) ?? property;
 
-  const response = await createInviteTokenViaApi({
-    type: "seller_invite",
-    agencyId: agency.id,
-    agencySlug: agency.slug,
-    propertyId: updatedProperty.id,
-    sellerToken,
-    email: seller.email,
-  });
-
-  if (response) {
+  try {
+    const response = await createInviteTokenViaApi({
+      type: "seller_invite",
+      agencyId: agency.id,
+      agencySlug: agency.slug,
+      propertyId: updatedProperty.id,
+      sellerToken,
+      email: seller.email,
+    });
     return {
       property: updatedProperty,
       email: buildSellerInviteEmail(
@@ -140,9 +195,10 @@ export async function createSharedSellerInviteForProperty(
       persistedIn: "supabase",
       sharedRecord: response.record,
     };
+  } catch (error) {
+    if (!canUseDevLocalInviteFallback(error)) throw error;
   }
 
-  ensureDevLocalFallbackAllowed();
   const localResult = createSellerInviteForProperty(agency, updatedProperty, {
     ...seller,
     email: seller.email.trim().toLowerCase(),
@@ -221,7 +277,7 @@ export function getSharedInviteStorageWarning(
   persistedIn: InviteTokenPersistence,
 ) {
   if (persistedIn !== "local" || !import.meta.env.DEV) return "";
-  return " Base partagée non configurée : ce lien ne fonctionnera que dans ce navigateur.";
+  return " Mode démo local : ce lien fonctionne uniquement dans ce navigateur.";
 }
 
 function lookupFromSharedInviteResponse(
@@ -304,19 +360,27 @@ function accessFromInviteRecord(record: InviteTokenRecord): AccessToken {
 
 async function createInviteTokenViaApi(
   data: CreateInviteTokenInput,
-): Promise<CreateInviteApiResponse | null> {
+): Promise<CreateInviteApiResponse> {
   try {
     const response = await fetch("/api/invites/create", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(data),
     });
+    const body = await readJsonResponse(response);
 
-    if (!response.ok) return null;
-    return (await response.json()) as CreateInviteApiResponse;
+    if (!response.ok || isCreateInviteApiError(body)) {
+      throw inviteCreationErrorFromResponse(body, response.status);
+    }
+
+    if (!isCreateInviteApiResponse(body)) {
+      throw new InviteCreationError("unknown_error", undefined, body);
+    }
+
+    return body;
   } catch (error) {
-    console.warn("Invitation API non créée", error);
-    return null;
+    if (error instanceof InviteCreationError) throw error;
+    throw new InviteCreationError("unknown_error", undefined, error);
   }
 }
 
@@ -361,6 +425,75 @@ async function completeInviteTokenViaApi({
 function ensureDevLocalFallbackAllowed() {
   if (import.meta.env.DEV) return;
   throw new Error("SHARED_INVITE_STORE_REQUIRED");
+}
+
+function canUseDevLocalInviteFallback(error: unknown) {
+  return (
+    import.meta.env.DEV &&
+    error instanceof InviteCreationError &&
+    error.code === "missing_supabase"
+  );
+}
+
+async function readJsonResponse(response: Response) {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function isCreateInviteApiResponse(
+  value: unknown,
+): value is CreateInviteApiResponse {
+  return (
+    isRecord(value) &&
+    typeof value.token === "string" &&
+    typeof value.inviteUrl === "string" &&
+    isRecord(value.record)
+  );
+}
+
+function isCreateInviteApiError(
+  value: unknown,
+): value is CreateInviteApiErrorResponse {
+  return (
+    isRecord(value) &&
+    value.ok === false &&
+    typeof value.message === "string" &&
+    isInviteCreationErrorCode(value.code)
+  );
+}
+
+function inviteCreationErrorFromResponse(
+  body: unknown,
+  status: number,
+): InviteCreationError {
+  if (isCreateInviteApiError(body)) {
+    return new InviteCreationError(body.code, body.message, body);
+  }
+
+  if (status === 400) {
+    return new InviteCreationError("unknown_error", undefined, body);
+  }
+
+  return new InviteCreationError("unknown_error", undefined, body);
+}
+
+function isInviteCreationErrorCode(
+  value: unknown,
+): value is InviteCreationErrorCode {
+  return (
+    value === "missing_supabase" ||
+    value === "missing_table" ||
+    value === "missing_agency" ||
+    value === "invalid_email" ||
+    value === "unknown_error"
+  );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 function getInviteAgency(record: InviteTokenRecord): Agency {

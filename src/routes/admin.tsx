@@ -39,6 +39,7 @@ import {
   addTeamMember,
   consumeStorageResetNotice,
   createAgency,
+  deleteTeamMember,
   disableAgency,
   generateAgencySlug,
   getAgents,
@@ -52,7 +53,9 @@ import {
 import { isValidEmail } from "@/lib/email-utils";
 import {
   createSharedTeamMemberInviteEmail,
+  getInviteCreationErrorMessage,
   getSharedInviteStorageWarning,
+  logInviteCreationFailure,
 } from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/admin")({
@@ -250,13 +253,13 @@ function AdminDashboard() {
     try {
       invite = await createSharedTeamMemberInviteEmail(agency, manager);
     } catch (error) {
-      console.info("Invitation patron non préparée", error);
+      logInviteCreationFailure(error);
+      deleteTeamMember(manager.id);
+      removeAgency(agency.id);
       setManualAccessLink("");
       setManualAccessMailto("");
       setManualAccessCopied(false);
-      setFeedback(
-        "Agence créée en mode démo. Invitation non préparée : base partagée non configurée.",
-      );
+      setFeedback(`Agence non créée. ${getInviteCreationErrorMessage(error)}`);
       refresh();
       return;
     }
@@ -311,23 +314,21 @@ function AdminDashboard() {
       return;
     }
 
-    const updated = activateAgency(agency.id);
-    if (!updated) return;
     let invites;
     try {
       invites = await Promise.all(
         managers.map((manager) =>
-          createSharedTeamMemberInviteEmail(updated, manager),
+          createSharedTeamMemberInviteEmail(agency, manager),
         ),
       );
     } catch (error) {
-      console.info("Invitations patron non préparées", error);
-      setFeedback(
-        "Agence activée. Invitations non préparées : base partagée non configurée.",
-      );
+      logInviteCreationFailure(error);
+      setFeedback(getInviteCreationErrorMessage(error));
       refresh();
       return;
     }
+    const updated = activateAgency(agency.id);
+    if (!updated) return;
     const emails = invites.map((invite) => invite.email);
     const storageWarning = getSharedInviteStorageWarning(
       invites.some((invite) => invite.persistedIn === "local")
