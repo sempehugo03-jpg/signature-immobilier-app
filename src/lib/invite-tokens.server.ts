@@ -122,7 +122,7 @@ export async function revokeInviteToken(token: string) {
   const { data, error } = await supabase
     .from(INVITE_TOKENS_TABLE)
     .update({
-      status: "expired",
+      status: "revoked",
     })
     .eq("token", token)
     .select("*")
@@ -227,7 +227,9 @@ function fromInviteTokenRow(row: InviteTokenRow): InviteTokenRecord {
     sellerToken: row.seller_token ?? undefined,
     email: row.email,
     status:
-      row.status === "used" || row.status === "expired"
+      row.status === "used" ||
+      row.status === "expired" ||
+      row.status === "revoked"
         ? row.status
         : "pending",
     createdAt: row.created_at ?? new Date().toISOString(),

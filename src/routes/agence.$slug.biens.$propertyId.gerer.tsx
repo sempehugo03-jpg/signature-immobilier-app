@@ -281,11 +281,21 @@ function AgencyPropertyDetailRoute() {
       return;
     }
 
-    const result = await createSharedSellerInviteForProperty(
-      agency,
-      property,
-      sellerForm,
-    );
+    let result;
+    try {
+      result = await createSharedSellerInviteForProperty(
+        agency,
+        property,
+        sellerForm,
+      );
+    } catch (error) {
+      console.info("Invitation vendeur non préparée", error);
+      setSellerError("");
+      setFeedback(
+        "Invitation vendeur non préparée : base partagée non configurée.",
+      );
+      return;
+    }
     const storageWarning = getSharedInviteStorageWarning(result.persistedIn);
     setProperty(result.property);
     setSellerError("");

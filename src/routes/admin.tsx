@@ -246,7 +246,20 @@ function AdminDashboard() {
       role: "manager",
       status: "invited",
     });
-    const invite = await createSharedTeamMemberInviteEmail(agency, manager);
+    let invite;
+    try {
+      invite = await createSharedTeamMemberInviteEmail(agency, manager);
+    } catch (error) {
+      console.info("Invitation patron non préparée", error);
+      setManualAccessLink("");
+      setManualAccessMailto("");
+      setManualAccessCopied(false);
+      setFeedback(
+        "Agence créée en mode démo. Invitation non préparée : base partagée non configurée.",
+      );
+      refresh();
+      return;
+    }
     const storageWarning = getSharedInviteStorageWarning(invite.persistedIn);
     const result = await sendTeamInviteEmail(
       agency.name,
@@ -300,11 +313,21 @@ function AdminDashboard() {
 
     const updated = activateAgency(agency.id);
     if (!updated) return;
-    const invites = await Promise.all(
-      managers.map((manager) =>
-        createSharedTeamMemberInviteEmail(updated, manager),
-      ),
-    );
+    let invites;
+    try {
+      invites = await Promise.all(
+        managers.map((manager) =>
+          createSharedTeamMemberInviteEmail(updated, manager),
+        ),
+      );
+    } catch (error) {
+      console.info("Invitations patron non préparées", error);
+      setFeedback(
+        "Agence activée. Invitations non préparées : base partagée non configurée.",
+      );
+      refresh();
+      return;
+    }
     const emails = invites.map((invite) => invite.email);
     const storageWarning = getSharedInviteStorageWarning(
       invites.some((invite) => invite.persistedIn === "local")
