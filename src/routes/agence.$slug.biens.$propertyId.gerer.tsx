@@ -32,7 +32,6 @@ import {
   addPropertyPhoto,
   addPropertyVisit,
   addVisitReport,
-  createSellerInviteForProperty,
   deletePropertyDocument,
   deletePropertyPhoto,
   deletePropertyVisit,
@@ -54,6 +53,10 @@ import {
   type PropertyPublicStatus,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  createSharedSellerInviteForProperty,
+  getSharedInviteStorageWarning,
+} from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/agence/$slug/biens/$propertyId/gerer")({
   head: () => ({
@@ -278,7 +281,12 @@ function AgencyPropertyDetailRoute() {
       return;
     }
 
-    const result = createSellerInviteForProperty(agency, property, sellerForm);
+    const result = await createSharedSellerInviteForProperty(
+      agency,
+      property,
+      sellerForm,
+    );
+    const storageWarning = getSharedInviteStorageWarning(result.persistedIn);
     setProperty(result.property);
     setSellerError("");
 
@@ -295,7 +303,9 @@ function AgencyPropertyDetailRoute() {
       });
 
       if (sent.sent) {
-        setFeedback("Espace vendeur créé. Email d’invitation envoyé.");
+        setFeedback(
+          `Espace vendeur créé. Email d’invitation envoyé.${storageWarning}`,
+        );
         return;
       }
     } catch (error) {
@@ -305,7 +315,7 @@ function AgencyPropertyDetailRoute() {
     setManualSellerInviteLink(result.email.accessUrl ?? "");
     setManualSellerInviteMailto(result.email.mailtoHref);
     setFeedback(
-      "Invitation vendeur créée. Email non envoyé : configuration email manquante.",
+      `Invitation vendeur créée. Email non envoyé : configuration email manquante.${storageWarning}`,
     );
   }
 
@@ -394,7 +404,7 @@ function AgencyPropertyDetailRoute() {
                     >
                       <a href={manualSellerInviteMailto}>
                         <Mail className="h-4 w-4" />
-                        Préparer un email manuel
+                        Ouvrir l’application mail
                       </a>
                     </Button>
                   )}

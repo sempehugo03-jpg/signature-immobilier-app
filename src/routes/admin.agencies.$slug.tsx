@@ -28,7 +28,6 @@ import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import { clearAdminSession } from "@/lib/admin-session";
 import {
   activateAgency,
-  createTeamMemberInviteEmail,
   disableAgency,
   getAbsoluteAgencyLinks,
   getAgents,
@@ -42,6 +41,10 @@ import {
   type TeamMember,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  createSharedTeamMemberInviteEmail,
+  getSharedInviteStorageWarning,
+} from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/admin/agencies/$slug")({
   head: () => ({
@@ -133,8 +136,16 @@ function AdminAgencyRoute() {
     const updated = activateAgency(agency.id);
     if (!updated) return;
 
-    const emails = managers.map((manager) =>
-      createTeamMemberInviteEmail(updated, manager),
+    const invites = await Promise.all(
+      managers.map((manager) =>
+        createSharedTeamMemberInviteEmail(updated, manager),
+      ),
+    );
+    const emails = invites.map((invite) => invite.email);
+    const storageWarning = getSharedInviteStorageWarning(
+      invites.some((invite) => invite.persistedIn === "local")
+        ? "local"
+        : "supabase",
     );
     setAgency(updated);
     setEmailPreviews(emails);
@@ -148,8 +159,8 @@ function AdminAgencyRoute() {
     const sentCount = results.filter((result) => result.sent).length;
     setFeedback(
       sentCount
-        ? "Agence activée. Email envoyé au(x) patron(s)."
-        : "Agence activée. Email non envoyé : configuration email manquante.",
+        ? `Agence activée. Email envoyé au(x) patron(s).${storageWarning}`
+        : `Agence activée. Email non envoyé : configuration email manquante.${storageWarning}`,
     );
   }
 
@@ -491,7 +502,7 @@ function AdminAgencyRoute() {
                         variant="outline"
                         className="rounded-full bg-white"
                       >
-                        <a href={email.mailtoHref}>Préparer un email manuel</a>
+                        <a href={email.mailtoHref}>Ouvrir l’application mail</a>
                       </Button>
                     </div>
                   </div>

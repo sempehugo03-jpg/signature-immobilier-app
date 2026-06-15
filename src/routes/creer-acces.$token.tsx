@@ -10,11 +10,13 @@ import {
 } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { type InviteAccessLookup } from "@/lib/agency-saas";
 import {
-  activateInviteAccess,
-  getInviteAccessByToken,
-  type InviteAccessLookup,
-} from "@/lib/agency-saas";
+  completeLoadedInviteAccess,
+  loadInviteAccess,
+  type CompletedInviteAccessLookup,
+  type LoadedInviteAccess,
+} from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/creer-acces/$token")({
   head: () => ({
@@ -26,19 +28,53 @@ export const Route = createFileRoute("/creer-acces/$token")({
 function CreateAccessRoute() {
   const { token } = Route.useParams();
   const [lookup, setLookup] = useState<InviteAccessLookup | null>(null);
+  const [loadedInvite, setLoadedInvite] = useState<LoadedInviteAccess | null>(
+    null,
+  );
   const [loaded, setLoaded] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordConfirm, setPasswordConfirm] = useState("");
   const [error, setError] = useState("");
   const [redirectPath, setRedirectPath] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    setLookup(getInviteAccessByToken(token));
-    setLoaded(true);
+    let cancelled = false;
+    setLoaded(false);
+    setLoadedInvite(null);
+    setLookup(null);
+    setError("");
+    setRedirectPath("");
+
+    loadInviteAccess(token)
+      .then((result) => {
+        if (cancelled) return;
+        setLoadedInvite(result);
+        setLookup(result.lookup);
+      })
+      .catch((error) => {
+        console.info("Invitation non lue", error);
+        if (!cancelled) {
+          setLookup({
+            status: "invalid",
+            title: "Lien invalide ou expiré",
+            message:
+              "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+          });
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setLoaded(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
   }, [token]);
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    if (!loadedInvite) return;
     if (password.length < 8) {
       setError("Le mot de passe doit contenir au moins 8 caractères.");
       return;
@@ -48,7 +84,21 @@ function CreateAccessRoute() {
       return;
     }
 
-    const result = activateInviteAccess(token, password);
+    setSubmitting(true);
+    let result: CompletedInviteAccessLookup;
+    try {
+      result = await completeLoadedInviteAccess({
+        token,
+        password,
+        loaded: loadedInvite,
+      });
+    } catch (error) {
+      console.info("Invitation non validée", error);
+      setSubmitting(false);
+      setError("Impossible de créer l’accès pour le moment.");
+      return;
+    }
+    setSubmitting(false);
     setLookup(result);
     if (result.status !== "valid") {
       setError("");
@@ -56,7 +106,7 @@ function CreateAccessRoute() {
     }
 
     const nextRedirectPath =
-      "redirectPath" in result ? result.redirectPath : "/";
+      "redirectPath" in result ? (result.redirectPath ?? "/") : "/";
     setRedirectPath(nextRedirectPath);
     setError("");
     window.setTimeout(() => {
@@ -142,8 +192,8 @@ function CreateAccessRoute() {
               />
             </Field>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <Button className="rounded-full" size="lg">
-              Créer mon accès
+            <Button className="rounded-full" size="lg" disabled={submitting}>
+              {submitting ? "Création en cours..." : "Créer mon accès"}
             </Button>
           </form>
         </SaasCard>
@@ -152,7 +202,9 @@ function CreateAccessRoute() {
   );
 }
 
-function getInviteDescription(lookup: Extract<InviteAccessLookup, { status: "valid" }>) {
+function getInviteDescription(
+  lookup: Extract<InviteAccessLookup, { status: "valid" }>,
+) {
   if (lookup.access.type === "manager_invite") {
     return `Vous allez créer votre mot de passe pour accéder à l’espace de ${lookup.agency.name}.`;
   }
@@ -164,7 +216,9 @@ function getInviteDescription(lookup: Extract<InviteAccessLookup, { status: "val
   return "Vous allez créer votre mot de passe pour accéder au suivi de votre bien.";
 }
 
-function getInviteEmail(lookup: Extract<InviteAccessLookup, { status: "valid" }>) {
+function getInviteEmail(
+  lookup: Extract<InviteAccessLookup, { status: "valid" }>,
+) {
   return (
     lookup.access.email ||
     lookup.member?.email ||
