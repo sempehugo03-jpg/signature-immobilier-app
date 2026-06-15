@@ -34,31 +34,23 @@ export function buildInviteEmailBody({
   accessUrl,
   propertyTitle,
 }: InviteEmailTemplateInput) {
-  const firstName = recipientFirstName.trim() || "à vous";
+  const recipientName = recipientFirstName.trim();
+  const firstName = recipientName || "à vous";
   const agency = agencyName.trim() || "votre agence";
 
   if (inviteType === "manager_invite") {
     return [
-      `Bonjour ${firstName},`,
+      recipientName ? `Bonjour ${recipientName},` : "Bonjour,",
       "",
       `Vous avez été ajouté comme gérant du portail Signature Immobilier de ${agency}.`,
       "",
-      "Créez votre accès pour gérer votre espace agence :",
-      "",
-      "[ BOUTON : Créer mon accès ]",
+      "Créez votre accès ici :",
       accessUrl,
       "",
-      "Depuis votre espace, vous pourrez :",
-      "- ajouter vos biens",
-      "- suivre les demandes d’estimation",
-      "- gérer votre équipe",
-      "- gérer les informations visibles par vos vendeurs",
-      "",
-      "Signature Immobilier ne remplace pas votre CRM.",
-      "Il améliore ce que vos clients voient.",
+      "Depuis votre espace, vous pourrez gérer votre agence, vos biens, vos agents, vos demandes d’estimation et les espaces vendeurs.",
       "",
       "À bientôt,",
-      "Hugo — Signature Immobilier",
+      "Signature Immobilier",
     ].join("\n");
   }
 

@@ -37,6 +37,8 @@ type SendInviteResult = {
   reason?: string | null;
 };
 
+const INVITE_EMAIL_TIMEOUT_MS = 8000;
+
 export function AgencyTeamManager({
   agencyId,
   title = "Équipe",
@@ -66,16 +68,30 @@ export function AgencyTeamManager({
   }
 
   async function onAdd(role: TeamRole, data: MemberFormData) {
-    const member = addTeamMember(agencyId, {
-      ...data,
-      role,
-      status: "invited",
-    });
-    await sendInvitation(
-      member,
-      role === "manager" ? "Patron ajouté" : "Agent ajouté",
-    );
-    refresh();
+    try {
+      const member = addTeamMember(agencyId, {
+        ...data,
+        role,
+        status: "invited",
+      });
+      await sendInvitation(
+        member,
+        role === "manager" ? "Patron ajouté" : "Agent ajouté",
+      );
+    } catch (error) {
+      console.info("Invitation non préparée", error);
+      setManualInviteLink("");
+      setManualInviteMailto("");
+      setManualInviteCopied(false);
+      setFeedback(
+        role === "manager"
+          ? "Impossible d’ajouter ce patron. Vérifiez les informations puis réessayez."
+          : "Impossible d’ajouter cet agent. Vérifiez les informations puis réessayez.",
+      );
+      throw error;
+    } finally {
+      refresh();
+    }
   }
 
   async function onResend(member: TeamMember) {
@@ -93,7 +109,20 @@ export function AgencyTeamManager({
       return;
     }
 
-    const email = createTeamMemberInviteEmail(agency, member);
+    let email: ReturnType<typeof createTeamMemberInviteEmail>;
+    try {
+      email = createTeamMemberInviteEmail(agency, member);
+    } catch (error) {
+      console.info("Lien d’invitation non préparé", error);
+      setManualInviteLink("");
+      setManualInviteMailto("");
+      setManualInviteCopied(false);
+      setFeedback(
+        `${successPrefix}. Invitation non préparée. Vérifiez les informations puis réessayez.`,
+      );
+      return;
+    }
+
     const result = await deliverInviteEmail({
       accessUrl: email.accessUrl ?? "",
       agencyName: agency.name,
@@ -111,9 +140,7 @@ export function AgencyTeamManager({
     setManualInviteLink(email.accessUrl ?? "");
     setManualInviteMailto(email.mailtoHref);
     setManualInviteCopied(false);
-    setFeedback(
-      `${successPrefix}. Invitation créée. Email non envoyé : configuration email manquante.`,
-    );
+    setFeedback(getInviteFallbackFeedback(successPrefix));
   }
 
   async function onCopyManualInviteLink() {
@@ -177,7 +204,7 @@ export function AgencyTeamManager({
           {manualInviteLink && (
             <div className="mt-3 rounded-2xl border border-emerald-100 bg-white/70 p-3">
               <div className="break-all font-medium">
-                Lien d’invitation à copier : {manualInviteLink}
+                Lien d’invitation : {manualInviteLink}
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 <Button
@@ -256,20 +283,39 @@ async function deliverInviteEmail({
   member: TeamMember;
 }): Promise<SendInviteResult> {
   try {
-    return await sendInviteEmail({
-      data: {
-        inviteType:
-          member.role === "manager" ? "manager_invite" : "agent_invite",
-        agencyName,
-        recipientEmail: member.email,
-        recipientFirstName: member.firstName,
-        accessUrl,
-      },
-    });
+    return await withTimeout(
+      sendInviteEmail({
+        data: {
+          inviteType:
+            member.role === "manager" ? "manager_invite" : "agent_invite",
+          agencyName,
+          recipientEmail: member.email,
+          recipientFirstName: member.firstName,
+          accessUrl,
+        },
+      }),
+      INVITE_EMAIL_TIMEOUT_MS,
+    );
   } catch (error) {
     console.info("Invitation non envoyée", error);
     return { sent: false, reason: "SERVER_FUNCTION_FAILED" };
   }
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = globalThis.setTimeout(() => {
+      reject(new Error("INVITE_EMAIL_TIMEOUT"));
+    }, timeoutMs);
+
+    promise.then(resolve, reject).finally(() => {
+      globalThis.clearTimeout(timeoutId);
+    });
+  });
+}
+
+function getInviteFallbackFeedback(successPrefix: string) {
+  return `${successPrefix}. Email non envoyé : configuration email manquante. Vous pouvez copier le lien ou préparer un email manuel.`;
 }
 
 function TeamColumn({
@@ -404,10 +450,16 @@ function AddMemberForm({
     }
 
     setSubmitting(true);
-    await onAdd(role, form);
-    setSubmitting(false);
-    setForm({ firstName: "", lastName: "", email: "", phone: "" });
-    setError("");
+    try {
+      await onAdd(role, form);
+      setForm({ firstName: "", lastName: "", email: "", phone: "" });
+      setError("");
+    } catch (error) {
+      console.info("Ajout du membre non finalisé", error);
+      setError("Impossible de finaliser l’invitation. Réessayez.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
