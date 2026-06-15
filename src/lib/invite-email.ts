@@ -11,6 +11,18 @@ export type InviteEmailTemplateInput = {
   propertyTitle?: string;
 };
 
+export type ManagerInviteEmailContentInput = {
+  firstName: string;
+  agencyName: string;
+  inviteUrl: string;
+};
+
+export type EmailUrlInput = {
+  to: string;
+  subject: string;
+  body: string;
+};
+
 export function isInviteAccessType(value: unknown): value is InviteAccessType {
   return (
     value === "manager_invite" ||
@@ -100,4 +112,41 @@ export function buildInviteEmailBody({
   ]
     .filter(Boolean)
     .join("\n");
+}
+
+export function buildManagerInviteEmailContent({
+  firstName,
+  agencyName,
+  inviteUrl,
+}: ManagerInviteEmailContentInput) {
+  return {
+    subject: getInviteEmailSubject("manager_invite"),
+    body: buildInviteEmailBody({
+      inviteType: "manager_invite",
+      agencyName,
+      recipientFirstName: firstName,
+      accessUrl: inviteUrl,
+    }),
+  };
+}
+
+export function buildGmailComposeUrl({ to, subject, body }: EmailUrlInput) {
+  return `https://mail.google.com/mail/?view=cm&fs=1&to=${encodeURIComponent(
+    to.trim(),
+  )}&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+export function buildMailtoUrl({ to, subject, body }: EmailUrlInput) {
+  return `mailto:${encodeURIComponent(to.trim())}?subject=${encodeURIComponent(
+    subject,
+  )}&body=${encodeURIComponent(body)}`;
+}
+
+export function openGmailCompose(gmailUrl: string) {
+  const opened = window.open(gmailUrl, "_blank", "noopener,noreferrer");
+  if (opened) opened.opener = null;
+}
+
+export function openMailApp(mailtoUrl: string) {
+  window.location.href = mailtoUrl;
 }
