@@ -26,6 +26,13 @@ import {
   type TeamRole,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  buildGmailComposeUrl,
+  buildMailtoUrl,
+  buildManagerInviteEmailContent,
+  openGmailCompose,
+  openMailApp,
+} from "@/lib/invite-email";
 
 type MemberFormData = Pick<
   TeamMember,
@@ -41,7 +48,7 @@ type PreparedInvite = ReturnType<typeof createTeamMemberInviteEmail>;
 
 const INVITE_EMAIL_TIMEOUT_MS = 8000;
 const MANAGER_INVITE_READY_FEEDBACK =
-  "Invitation prête. Un email prérempli a été ouvert pour envoi manuel.";
+  "Invitation prête. Choisissez comment envoyer le lien au patron.";
 
 export function AgencyTeamManager({
   agencyId,
@@ -58,6 +65,7 @@ export function AgencyTeamManager({
   const [agents, setAgents] = useState<TeamMember[]>([]);
   const [feedback, setFeedback] = useState("");
   const [manualInviteLink, setManualInviteLink] = useState("");
+  const [manualInviteGmail, setManualInviteGmail] = useState("");
   const [manualInviteMailto, setManualInviteMailto] = useState("");
   const [manualInviteCopied, setManualInviteCopied] = useState(false);
 
@@ -87,6 +95,7 @@ export function AgencyTeamManager({
     } catch (error) {
       console.info("Membre non créé", error);
       setManualInviteLink("");
+      setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback(
@@ -124,6 +133,7 @@ export function AgencyTeamManager({
     const agency = getAgencyById(agencyId);
     if (!agency) {
       setManualInviteLink("");
+      setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback("Agence introuvable.");
@@ -136,6 +146,7 @@ export function AgencyTeamManager({
     } catch (error) {
       console.info("Lien d’invitation non préparé", error);
       setManualInviteLink("");
+      setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback(
@@ -147,6 +158,7 @@ export function AgencyTeamManager({
     const inviteUrl = email.accessUrl ?? "";
     if (!inviteUrl) {
       setManualInviteLink("");
+      setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback(
@@ -160,6 +172,7 @@ export function AgencyTeamManager({
     }
 
     setManualInviteLink(inviteUrl);
+    setManualInviteGmail("");
     setManualInviteMailto("");
     setManualInviteCopied(false);
     logInviteDebug("invite_created", {
@@ -171,21 +184,29 @@ export function AgencyTeamManager({
     });
 
     if (member.role === "manager") {
-      const managerInviteInput = {
-        recipientEmail: member.email,
+      const emailContent = buildManagerInviteEmailContent({
         firstName: member.firstName,
         agencyName: agency.name,
         inviteUrl,
-      };
-      const mailtoHref = createManagerInviteMailtoUrl(managerInviteInput);
-      setManualInviteMailto(mailtoHref);
+      });
+      setManualInviteGmail(
+        buildGmailComposeUrl({
+          to: member.email,
+          ...emailContent,
+        }),
+      );
+      setManualInviteMailto(
+        buildMailtoUrl({
+          to: member.email,
+          ...emailContent,
+        }),
+      );
       setFeedback(MANAGER_INVITE_READY_FEEDBACK);
-      openManagerInviteMailClient(managerInviteInput);
       logInviteDebug("invite_email_result", {
         memberId: member.id,
         role: member.role,
         emailSent: false,
-        reason: "manual_mailto_opened",
+        reason: "manual_send_choice_ready",
         inviteUrl,
       });
       return true;
@@ -206,12 +227,14 @@ export function AgencyTeamManager({
     });
 
     if (result.sent) {
+      setManualInviteGmail("");
       setManualInviteMailto("");
       setManualInviteCopied(false);
       setFeedback(`${successPrefix}. Email d’invitation envoyé.`);
       return true;
     }
 
+    setManualInviteGmail("");
     setManualInviteMailto(email.mailtoHref);
     setManualInviteCopied(false);
     setFeedback(getInviteFallbackFeedback(successPrefix));
@@ -234,6 +257,16 @@ export function AgencyTeamManager({
     if (opened) opened.opener = null;
   }
 
+  function onOpenManualInviteGmail() {
+    if (!manualInviteGmail) return;
+    openGmailCompose(manualInviteGmail);
+  }
+
+  function onOpenManualInviteMailApp() {
+    if (!manualInviteMailto) return;
+    openMailApp(manualInviteMailto);
+  }
+
   function onDelete(member: TeamMember) {
     const isManager = member.role === "manager";
     const message = isManager
@@ -242,6 +275,7 @@ export function AgencyTeamManager({
     if (!window.confirm(message)) return;
     deleteTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteGmail("");
     setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(isManager ? "Patron supprimé." : "Agent supprimé.");
@@ -251,6 +285,7 @@ export function AgencyTeamManager({
   function onDisable(member: TeamMember) {
     disableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteGmail("");
     setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(
@@ -262,6 +297,7 @@ export function AgencyTeamManager({
   function onEnable(member: TeamMember) {
     enableTeamMember(member.id);
     setManualInviteLink("");
+    setManualInviteGmail("");
     setManualInviteMailto("");
     setManualInviteCopied(false);
     setFeedback(
@@ -300,16 +336,26 @@ export function AgencyTeamManager({
                   <ExternalLink className="h-4 w-4" />
                   Ouvrir le lien
                 </Button>
-                {manualInviteMailto && (
+                {manualInviteGmail && (
                   <Button
-                    asChild
+                    type="button"
                     variant="outline"
                     className="rounded-full bg-white"
+                    onClick={onOpenManualInviteGmail}
                   >
-                    <a href={manualInviteMailto}>
-                      <Mail className="h-4 w-4" />
-                      Préparer un email manuel
-                    </a>
+                    <Mail className="h-4 w-4" />
+                    Ouvrir dans Gmail
+                  </Button>
+                )}
+                {manualInviteMailto && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={onOpenManualInviteMailApp}
+                  >
+                    <Mail className="h-4 w-4" />
+                    Ouvrir l’application mail
                   </Button>
                 )}
               </div>
@@ -400,78 +446,7 @@ function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
 }
 
 function getInviteFallbackFeedback(successPrefix: string) {
-  return `${successPrefix}. Email non envoyé : configuration email manquante. Vous pouvez copier le lien ou préparer un email manuel.`;
-}
-
-function openManagerInviteMailClient({
-  recipientEmail,
-  firstName,
-  agencyName,
-  inviteUrl,
-}: {
-  recipientEmail: string;
-  firstName: string;
-  agencyName: string;
-  inviteUrl: string;
-}) {
-  const mailtoUrl = createManagerInviteMailtoUrl({
-    recipientEmail,
-    firstName,
-    agencyName,
-    inviteUrl,
-  });
-
-  window.location.href = mailtoUrl;
-}
-
-function createManagerInviteMailtoUrl({
-  recipientEmail,
-  firstName,
-  agencyName,
-  inviteUrl,
-}: {
-  recipientEmail: string;
-  firstName: string;
-  agencyName: string;
-  inviteUrl: string;
-}) {
-  const subject = "Créez votre accès Signature Immobilier";
-  const body = buildManagerInviteMailBody({
-    firstName,
-    agencyName,
-    inviteUrl,
-  });
-
-  return `mailto:${recipientEmail.trim()}?subject=${encodeURIComponent(
-    subject,
-  )}&body=${encodeURIComponent(body)}`;
-}
-
-function buildManagerInviteMailBody({
-  firstName,
-  agencyName,
-  inviteUrl,
-}: {
-  firstName: string;
-  agencyName: string;
-  inviteUrl: string;
-}) {
-  const recipientName = firstName.trim();
-  const agency = agencyName.trim() || "votre agence";
-
-  return [
-    recipientName ? `Bonjour ${recipientName},` : "Bonjour,",
-    "",
-    `Vous avez été ajouté comme gérant du portail Signature Immobilier de ${agency}.`,
-    "",
-    "Créez votre accès ici :",
-    inviteUrl,
-    "",
-    "Depuis votre espace, vous pourrez gérer votre agence, vos biens, vos agents, vos demandes d’estimation et les espaces vendeurs.",
-    "",
-    "À bientôt,",
-    "Signature Immobilier",
-  ].join("\n");
+  return `${successPrefix}. Email non envoyé : configuration email manquante. Vous pouvez copier le lien ou ouvrir l’application mail.`;
 }
 
 function getTokenFromInviteUrl(inviteUrl: string) {
