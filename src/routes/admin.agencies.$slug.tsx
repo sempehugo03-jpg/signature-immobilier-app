@@ -43,7 +43,9 @@ import {
 import { isValidEmail } from "@/lib/email-utils";
 import {
   createSharedTeamMemberInviteEmail,
+  getInviteCreationErrorMessage,
   getSharedInviteStorageWarning,
+  logInviteCreationFailure,
 } from "@/lib/shared-invites";
 
 export const Route = createFileRoute("/admin/agencies/$slug")({
@@ -133,25 +135,21 @@ function AdminAgencyRoute() {
       return;
     }
 
-    const updated = activateAgency(agency.id);
-    if (!updated) return;
-
     let invites;
     try {
       invites = await Promise.all(
         managers.map((manager) =>
-          createSharedTeamMemberInviteEmail(updated, manager),
+          createSharedTeamMemberInviteEmail(agency, manager),
         ),
       );
     } catch (error) {
-      console.info("Invitations patron non préparées", error);
-      setAgency(updated);
+      logInviteCreationFailure(error);
       setEmailPreviews([]);
-      setFeedback(
-        "Agence activée. Invitations non préparées : base partagée non configurée.",
-      );
+      setFeedback(getInviteCreationErrorMessage(error));
       return;
     }
+    const updated = activateAgency(agency.id);
+    if (!updated) return;
     const emails = invites.map((invite) => invite.email);
     const storageWarning = getSharedInviteStorageWarning(
       invites.some((invite) => invite.persistedIn === "local")
