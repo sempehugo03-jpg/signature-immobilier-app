@@ -15,6 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
+import { isAdminCodeValid, saveAdminSession } from "@/lib/admin-session";
 import { supabase } from "@/lib/supabase";
 
 type CurrentAccessResult =
@@ -54,6 +55,9 @@ function MonSuiviPage() {
   const [submitting, setSubmitting] = useState(false);
   const [resolvingSession, setResolvingSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showAdminAccess, setShowAdminAccess] = useState(false);
+  const [adminCode, setAdminCode] = useState("");
+  const [adminError, setAdminError] = useState<string | null>(null);
 
   useEffect(() => {
     if (loading || !session?.access_token) return;
@@ -117,6 +121,19 @@ function MonSuiviPage() {
     }
 
     window.location.assign(accessResult.destination);
+  }
+
+  function onAdminSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setAdminError(null);
+
+    if (!isAdminCodeValid(adminCode)) {
+      setAdminError("Code admin incorrect.");
+      return;
+    }
+
+    saveAdminSession();
+    window.location.assign("/admin");
   }
 
   return (
@@ -192,6 +209,52 @@ function MonSuiviPage() {
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </form>
+
+              <div className="mt-6 border-t border-border/60 pt-5">
+                <p className="text-center text-xs text-muted-foreground">
+                  Vous gérez Signature Immobilier ?{" "}
+                  <button
+                    type="button"
+                    className="font-medium text-primary underline-offset-4 transition hover:underline"
+                    onClick={() => {
+                      setShowAdminAccess((value) => !value);
+                      setAdminError(null);
+                    }}
+                  >
+                    Accès administrateur Signature
+                  </button>
+                </p>
+
+                {showAdminAccess && (
+                  <form
+                    className="mt-4 rounded-xl border border-border/70 bg-secondary/30 p-4"
+                    onSubmit={onAdminSubmit}
+                  >
+                    <div className="space-y-2">
+                      <Label htmlFor="admin-code">Code admin</Label>
+                      <Input
+                        id="admin-code"
+                        type="password"
+                        autoComplete="current-password"
+                        value={adminCode}
+                        onChange={(event) => {
+                          setAdminCode(event.target.value);
+                          setAdminError(null);
+                        }}
+                      />
+                    </div>
+
+                    {adminError && (
+                      <p className="mt-3 text-sm text-red-600">{adminError}</p>
+                    )}
+
+                    <Button className="mt-4 w-full rounded-full" type="submit">
+                      Ouvrir l’admin
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                  </form>
+                )}
+              </div>
             </CardContent>
           </Card>
         </div>

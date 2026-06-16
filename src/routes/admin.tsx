@@ -32,6 +32,7 @@ import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
   clearAdminSession,
   isAdminSessionActive,
+  isAdminCodeValid,
   saveAdminSession,
 } from "@/lib/admin-session";
 import {
@@ -114,7 +115,7 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (code.trim() !== getAdminCode()) {
+    if (!isAdminCodeValid(code)) {
       setError("Code admin incorrect.");
       return;
     }
@@ -749,9 +750,4 @@ function AgencyCard({
       </div>
     </SaasCard>
   );
-}
-
-function getAdminCode() {
-  const env = import.meta.env as Record<string, string | undefined>;
-  return env.NEXT_PUBLIC_ADMIN_CODE?.trim() || "signature-admin";
 }

@@ -1,4 +1,5 @@
 export const ADMIN_SESSION_KEY = "admin_access";
+const DEFAULT_ADMIN_CODE = "signature-admin";
 
 const LEGACY_ADMIN_SESSION_KEYS = [
   "admin_session",
@@ -31,6 +32,15 @@ export function saveAdminSession() {
   } catch {
     // If storage is unavailable, keep the page stable and let the login retry.
   }
+}
+
+export function getAdminCode() {
+  const env = import.meta.env as Record<string, string | undefined>;
+  return env.NEXT_PUBLIC_ADMIN_CODE?.trim() || DEFAULT_ADMIN_CODE;
+}
+
+export function isAdminCodeValid(code: string) {
+  return code.trim() === getAdminCode();
 }
 
 export function clearAdminSession() {
