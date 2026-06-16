@@ -1,18 +1,14 @@
 import {
-  activateInviteAccess,
   activeFeatures,
   buildAgentInviteEmail,
   buildManagerInviteEmail,
   buildSellerInviteEmail,
   createAgency,
-  createSellerInviteForProperty,
-  createTeamMemberInviteEmail,
   findAgencyPropertyBySellerToken,
   getAgencyById,
   getAgencyBySlug,
   getTeamMembers,
   getAgencyProperty,
-  getInviteAccessByToken,
   saveAgencyAccessSession,
   saveAgencyProperty,
   updateTeamMember,
@@ -50,12 +46,15 @@ export type InviteCreationErrorCode =
 
 type CreateInviteApiErrorResponse = {
   ok: false;
-  code: InviteCreationErrorCode;
+  code: InviteApiErrorCode;
   message: string;
 };
 
 type ReadInviteApiResponse = {
+  ok?: boolean;
   status: ApiReadInviteStatus;
+  code?: InviteApiErrorCode;
+  message?: string;
   record?: InviteTokenRecord;
 };
 
@@ -63,6 +62,8 @@ type CompleteInviteApiResponse = {
   status: ApiReadInviteStatus;
   destination?: string;
   record?: InviteTokenRecord;
+  code?: InviteApiErrorCode;
+  message?: string;
   error?: string;
 };
 
@@ -86,7 +87,19 @@ export type CompletedInviteAccessLookup = InviteAccessLookup & {
   redirectPath?: string;
 };
 
-const inviteCreationErrorMessages: Record<InviteCreationErrorCode, string> = {
+export type InviteApiErrorCode =
+  | InviteCreationErrorCode
+  | "missing_supabase_url"
+  | "missing_service_role_key"
+  | "missing_invite_tokens_table"
+  | "supabase_permission_error"
+  | "supabase_unknown_error"
+  | "not_found"
+  | "used"
+  | "invalid"
+  | "invalid_payload";
+
+const inviteCreationErrorMessages: Record<InviteApiErrorCode, string> = {
   missing_supabase:
     "Impossible de créer le lien d’invitation : base de données non configurée.",
   missing_table:
@@ -94,16 +107,28 @@ const inviteCreationErrorMessages: Record<InviteCreationErrorCode, string> = {
   missing_agency:
     "Impossible de créer le lien d’invitation : agence introuvable.",
   invalid_email: "Email invalide.",
+  missing_supabase_url: "NEXT_PUBLIC_SUPABASE_URL manquante côté serveur.",
+  missing_service_role_key: "SUPABASE_SERVICE_ROLE_KEY manquante côté serveur.",
+  missing_invite_tokens_table:
+    "Table invite_tokens absente. Exécutez la migration Supabase.",
+  supabase_permission_error:
+    "Erreur de permission Supabase. Vérifiez SUPABASE_SERVICE_ROLE_KEY.",
+  supabase_unknown_error: "Erreur Supabase inconnue.",
+  not_found: "Lien invalide ou expiré.",
+  used: "Ce lien a déjà été utilisé.",
+  invalid: "Lien invalide ou expiré.",
+  invalid_payload:
+    "Impossible de créer le lien d’invitation : données invalides.",
   unknown_error:
     "Impossible de créer le lien d’invitation. Consultez la console pour le détail.",
 };
 
 export class InviteCreationError extends Error {
-  code: InviteCreationErrorCode;
+  code: InviteApiErrorCode;
   cause?: unknown;
 
   constructor(
-    code: InviteCreationErrorCode,
+    code: InviteApiErrorCode,
     message = inviteCreationErrorMessages[code],
     cause?: unknown,
   ) {
@@ -132,30 +157,21 @@ export async function createSharedTeamMemberInviteEmail(
   agency: Agency,
   member: TeamMember,
 ): Promise<SharedInviteEmailResult> {
-  try {
-    const response = await createInviteTokenViaApi({
-      type: member.role === "manager" ? "manager_invite" : "agent_invite",
-      agencyId: agency.id,
-      agencySlug: agency.slug,
-      teamMemberId: member.id,
-      email: member.email,
-    });
-    const access = accessFromInviteRecord(response.record);
-    return {
-      email:
-        member.role === "manager"
-          ? buildManagerInviteEmail(agency, member, access)
-          : buildAgentInviteEmail(agency, member, access),
-      persistedIn: "supabase",
-      sharedRecord: response.record,
-    };
-  } catch (error) {
-    if (!canUseDevLocalInviteFallback(error)) throw error;
-  }
-
+  const response = await createInviteTokenViaApi({
+    type: member.role === "manager" ? "manager_invite" : "agent_invite",
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    teamMemberId: member.id,
+    email: member.email,
+  });
+  const access = accessFromInviteRecord(response.record);
   return {
-    email: createTeamMemberInviteEmail(agency, member),
-    persistedIn: "local",
+    email:
+      member.role === "manager"
+        ? buildManagerInviteEmail(agency, member, access)
+        : buildAgentInviteEmail(agency, member, access),
+    persistedIn: "supabase",
+    sharedRecord: response.record,
   };
 }
 
@@ -175,38 +191,24 @@ export async function createSharedSellerInviteForProperty(
       sellerPhone: seller.phone.trim(),
     }).find((item) => item.id === property.id) ?? property;
 
-  try {
-    const response = await createInviteTokenViaApi({
-      type: "seller_invite",
-      agencyId: agency.id,
-      agencySlug: agency.slug,
-      propertyId: updatedProperty.id,
-      sellerToken,
-      email: seller.email,
-    });
-    return {
-      property: updatedProperty,
-      email: buildSellerInviteEmail(
-        agency,
-        updatedProperty,
-        seller,
-        accessFromInviteRecord(response.record),
-      ),
-      persistedIn: "supabase",
-      sharedRecord: response.record,
-    };
-  } catch (error) {
-    if (!canUseDevLocalInviteFallback(error)) throw error;
-  }
-
-  const localResult = createSellerInviteForProperty(agency, updatedProperty, {
-    ...seller,
-    email: seller.email.trim().toLowerCase(),
+  const response = await createInviteTokenViaApi({
+    type: "seller_invite",
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    propertyId: updatedProperty.id,
+    sellerToken,
+    email: seller.email,
   });
   return {
-    property: localResult.property,
-    email: localResult.email,
-    persistedIn: "local",
+    property: updatedProperty,
+    email: buildSellerInviteEmail(
+      agency,
+      updatedProperty,
+      seller,
+      accessFromInviteRecord(response.record),
+    ),
+    persistedIn: "supabase",
+    sharedRecord: response.record,
   };
 }
 
@@ -214,18 +216,15 @@ export async function loadInviteAccess(
   token: string,
 ): Promise<LoadedInviteAccess> {
   const response = await getInviteTokenViaApi(token);
-  if (response) {
-    return {
-      lookup: lookupFromSharedInviteResponse(response.status, response.record),
-      persistedIn: "supabase",
-      sharedRecord: response.record,
-    };
-  }
-
-  ensureDevLocalFallbackAllowed();
   return {
-    lookup: getInviteAccessByToken(token),
-    persistedIn: "local",
+    lookup: lookupFromSharedInviteResponse(
+      response.status,
+      response.record,
+      response.code,
+      response.message,
+    ),
+    persistedIn: "supabase",
+    sharedRecord: response.record,
   };
 }
 
@@ -238,11 +237,6 @@ export async function completeLoadedInviteAccess({
   password: string;
   loaded: LoadedInviteAccess;
 }): Promise<CompletedInviteAccessLookup> {
-  if (loaded.persistedIn === "local" || !loaded.sharedRecord) {
-    ensureDevLocalFallbackAllowed();
-    return activateInviteAccess(token, password);
-  }
-
   const response = await completeInviteTokenViaApi({
     token,
     password,
@@ -252,6 +246,8 @@ export async function completeLoadedInviteAccess({
     return lookupFromSharedInviteResponse(
       response?.status ?? "invalid",
       response?.record ?? loaded.sharedRecord,
+      response?.code,
+      response?.message,
     );
   }
 
@@ -283,14 +279,27 @@ export function getSharedInviteStorageWarning(
 function lookupFromSharedInviteResponse(
   status: ApiReadInviteStatus,
   record?: InviteTokenRecord,
+  code?: InviteApiErrorCode,
+  message?: string,
 ): InviteAccessLookup {
+  if (!record && code && isInviteInfrastructureErrorCode(code)) {
+    return invalidLookup("invalid", undefined, {
+      title: getInfrastructureErrorTitle(code, message),
+      message: getInfrastructureErrorMessage(code, message),
+    });
+  }
+
   if (!record || status === "invalid" || status === "revoked") {
-    return invalidLookup("invalid", record);
+    return invalidLookup("invalid", record, message ? { message } : undefined);
   }
 
   const effectiveStatus = getEffectiveInviteStatus({ ...record, status });
   if (effectiveStatus !== "pending") {
-    return invalidLookup(effectiveStatus, record);
+    return invalidLookup(
+      effectiveStatus,
+      record,
+      message ? { message } : undefined,
+    );
   }
 
   const access = accessFromInviteRecord(record);
@@ -310,6 +319,7 @@ function lookupFromSharedInviteResponse(
 function invalidLookup(
   status: "invalid" | "used" | "expired",
   record?: InviteTokenRecord,
+  custom?: { title?: string; message?: string },
 ): InviteAccessLookup {
   const access = record ? accessFromInviteRecord(record) : null;
   const agency = record ? getInviteAgency(record) : null;
@@ -333,8 +343,8 @@ function invalidLookup(
 
   return {
     status,
-    title: labels[status].title,
-    message: labels[status].message,
+    title: custom?.title ?? labels[status].title,
+    message: custom?.message ?? labels[status].message,
     access,
     agency,
   };
@@ -386,18 +396,33 @@ async function createInviteTokenViaApi(
 
 async function getInviteTokenViaApi(
   token: string,
-): Promise<ReadInviteApiResponse | null> {
+): Promise<ReadInviteApiResponse> {
   try {
     const response = await fetch(`/api/invites/${encodeURIComponent(token)}`);
+    const body = await readJsonResponse(response);
+
+    if (isReadInviteApiResponse(body)) {
+      return body;
+    }
 
     if (response.status === 404) {
-      return { status: "invalid" };
+      return { ok: false, status: "invalid", code: "not_found" };
     }
-    if (!response.ok) return null;
-    return (await response.json()) as ReadInviteApiResponse;
+
+    return {
+      ok: false,
+      status: "invalid",
+      code: "supabase_unknown_error",
+      message: inviteCreationErrorMessages.supabase_unknown_error,
+    };
   } catch (error) {
     console.warn("Invitation API non lue", error);
-    return null;
+    return {
+      ok: false,
+      status: "invalid",
+      code: "supabase_unknown_error",
+      message: inviteCreationErrorMessages.supabase_unknown_error,
+    };
   }
 }
 
@@ -420,19 +445,6 @@ async function completeInviteTokenViaApi({
     console.warn("Invitation API non validée", error);
     return null;
   }
-}
-
-function ensureDevLocalFallbackAllowed() {
-  if (import.meta.env.DEV) return;
-  throw new Error("SHARED_INVITE_STORE_REQUIRED");
-}
-
-function canUseDevLocalInviteFallback(error: unknown) {
-  return (
-    import.meta.env.DEV &&
-    error instanceof InviteCreationError &&
-    error.code === "missing_supabase"
-  );
 }
 
 async function readJsonResponse(response: Response) {
@@ -482,14 +494,67 @@ function inviteCreationErrorFromResponse(
 
 function isInviteCreationErrorCode(
   value: unknown,
-): value is InviteCreationErrorCode {
+): value is InviteApiErrorCode {
   return (
     value === "missing_supabase" ||
     value === "missing_table" ||
     value === "missing_agency" ||
     value === "invalid_email" ||
+    value === "missing_supabase_url" ||
+    value === "missing_service_role_key" ||
+    value === "missing_invite_tokens_table" ||
+    value === "supabase_permission_error" ||
+    value === "supabase_unknown_error" ||
+    value === "not_found" ||
+    value === "used" ||
+    value === "invalid" ||
+    value === "invalid_payload" ||
     value === "unknown_error"
   );
+}
+
+function isReadInviteApiResponse(
+  value: unknown,
+): value is ReadInviteApiResponse {
+  return (
+    isRecord(value) &&
+    typeof value.status === "string" &&
+    (value.status === "pending" ||
+      value.status === "used" ||
+      value.status === "expired" ||
+      value.status === "revoked" ||
+      value.status === "invalid")
+  );
+}
+
+function isInviteInfrastructureErrorCode(code: InviteApiErrorCode) {
+  return (
+    code === "missing_supabase_url" ||
+    code === "missing_service_role_key" ||
+    code === "missing_invite_tokens_table" ||
+    code === "supabase_permission_error" ||
+    code === "supabase_unknown_error"
+  );
+}
+
+function getInfrastructureErrorTitle(
+  code: InviteApiErrorCode,
+  message?: string,
+) {
+  if (import.meta.env.DEV && code === "missing_invite_tokens_table") {
+    return message || inviteCreationErrorMessages.missing_invite_tokens_table;
+  }
+
+  if (import.meta.env.DEV && message) return message;
+  return "Lien temporairement indisponible";
+}
+
+function getInfrastructureErrorMessage(
+  code: InviteApiErrorCode,
+  message?: string,
+) {
+  if (import.meta.env.DEV && message) return message;
+  return "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.";
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

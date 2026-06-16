@@ -548,11 +548,11 @@ export function getActiveManagers(agencyId: string) {
 export function addTeamMember(
   agencyId: string,
   data: Pick<TeamMember, "firstName" | "lastName" | "email" | "role"> &
-    Partial<Pick<TeamMember, "phone" | "status">>,
+    Partial<Pick<TeamMember, "id" | "phone" | "status">>,
 ) {
   const now = new Date().toISOString();
   const member: TeamMember = {
-    id: `member-${Date.now()}-${randomId()}`,
+    id: data.id ?? `member-${Date.now()}-${randomId()}`,
     agencyId,
     firstName: data.firstName.trim(),
     lastName: data.lastName.trim(),

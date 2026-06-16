@@ -6,6 +6,7 @@ import {
 } from "@/lib/invite-tokens";
 import {
   getInviteToken,
+  inviteTokenApiError,
   markInviteTokenUsed,
 } from "@/lib/server/invite-tokens";
 
@@ -19,7 +20,12 @@ export const Route = createFileRoute("/api/invites/complete")({
 
         if (!token || password.length < 8) {
           return Response.json(
-            { error: "INVALID_INVITE_COMPLETION", status: "invalid" },
+            {
+              ok: false,
+              code: "invalid_payload",
+              message: "Token ou mot de passe invalide.",
+              status: "invalid",
+            },
             { status: 400 },
           );
         }
@@ -28,7 +34,12 @@ export const Route = createFileRoute("/api/invites/complete")({
           const record = await getInviteToken(token);
           if (!record) {
             return Response.json(
-              { error: "INVITE_TOKEN_NOT_FOUND", status: "invalid" },
+              {
+                ok: false,
+                code: "not_found",
+                message: "Lien invalide ou expiré.",
+                status: "invalid",
+              },
               { status: 404 },
             );
           }
@@ -37,7 +48,9 @@ export const Route = createFileRoute("/api/invites/complete")({
           if (status !== "pending") {
             return Response.json(
               {
-                error: "INVITE_TOKEN_NOT_PENDING",
+                ok: false,
+                code: status === "used" ? "used" : "invalid",
+                message: getInviteCompletionStatusMessage(status),
                 status: status === "revoked" ? "invalid" : status,
                 record,
               },
@@ -47,15 +60,22 @@ export const Route = createFileRoute("/api/invites/complete")({
 
           const usedRecord = await markInviteTokenUsed(token);
           return Response.json({
+            ok: true,
             status: "used",
             destination: getInviteDestination(usedRecord),
             record: usedRecord,
           });
         } catch (error) {
           console.warn("Invitation Supabase non validée", error);
+          const apiError = inviteTokenApiError(error);
           return Response.json(
-            { error: "SHARED_INVITE_STORE_UNAVAILABLE" },
-            { status: 503 },
+            {
+              ok: false,
+              code: apiError.code,
+              message: apiError.message,
+              status: "invalid",
+            },
+            { status: apiError.status },
           );
         }
       },
@@ -75,4 +95,10 @@ function readString(data: unknown, key: string) {
   if (!data || typeof data !== "object" || Array.isArray(data)) return "";
   const value = (data as Record<string, unknown>)[key];
   return typeof value === "string" ? value.trim() : "";
+}
+
+function getInviteCompletionStatusMessage(status: string) {
+  if (status === "used") return "Ce lien a déjà été utilisé.";
+  if (status === "expired") return "Ce lien a expiré.";
+  return "Lien invalide ou expiré.";
 }
