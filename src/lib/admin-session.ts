@@ -1,6 +1,11 @@
 export const ADMIN_SESSION_KEY = "admin_access";
 
 const LEGACY_ADMIN_SESSION_KEYS = [
+  "admin_session",
+  "admin_code",
+  "admin_user",
+  "owner_access",
+  "owner_session",
   "signature_admin_access",
   "signature_admin_session",
   "signature_admin_flash",

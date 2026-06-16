@@ -1,5 +1,3 @@
-import process from "node:process";
-
 import type { User } from "@supabase/supabase-js";
 
 import type { InviteTokenRecord } from "@/lib/invite-tokens";
@@ -9,7 +7,6 @@ import {
 } from "@/lib/server/supabase-admin";
 
 const USER_ACCESSES_TABLE = "user_accesses";
-const DEFAULT_ADMIN_EMAIL = "sempehugo03@gmail.com";
 
 export type UserAccessRole = "admin" | "manager" | "agent" | "seller";
 
@@ -214,19 +211,6 @@ export async function getActiveUserAccessForEmail(email: string) {
     .find((item) => Boolean(getUserAccessDestination(item)));
 
   return access ?? null;
-}
-
-export function getConfiguredAdminAccess(email: string) {
-  if (!isConfiguredAdminEmail(email)) return null;
-  const now = new Date().toISOString();
-  return {
-    id: `admin-${normalizeEmail(email)}`,
-    email: normalizeEmail(email),
-    role: "admin",
-    isActive: true,
-    createdAt: now,
-    updatedAt: now,
-  } satisfies UserAccessRecord;
 }
 
 export function getUserAccessDestination(access: UserAccessRecord) {
@@ -506,24 +490,6 @@ function isUserAccessRole(value: unknown): value is UserAccessRole {
     value === "agent" ||
     value === "seller"
   );
-}
-
-function isConfiguredAdminEmail(email: string) {
-  const normalizedEmail = normalizeEmail(email);
-  return readConfiguredAdminEmails().includes(normalizedEmail);
-}
-
-function readConfiguredAdminEmails() {
-  return (
-    process.env.ADMIN_EMAILS ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAILS ||
-    process.env.ADMIN_EMAIL ||
-    process.env.NEXT_PUBLIC_ADMIN_EMAIL ||
-    DEFAULT_ADMIN_EMAIL
-  )
-    .split(",")
-    .map(normalizeEmail)
-    .filter(Boolean);
 }
 
 function normalizeEmail(email: string) {

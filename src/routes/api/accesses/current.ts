@@ -2,7 +2,6 @@ import { createFileRoute } from "@tanstack/react-router";
 
 import {
   getActiveUserAccessForEmail,
-  getConfiguredAdminAccess,
   getUserAccessDestination,
   userAccessApiError,
 } from "@/lib/server/user-accesses";
@@ -40,9 +39,7 @@ export const Route = createFileRoute("/api/accesses/current")({
             );
           }
 
-          const access =
-            getConfiguredAdminAccess(email) ??
-            (await getActiveUserAccessForEmail(email));
+          const access = await getActiveUserAccessForEmail(email);
 
           if (!access) {
             return Response.json(
