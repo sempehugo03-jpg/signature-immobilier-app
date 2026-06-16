@@ -115,17 +115,18 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (code.trim() !== getAdminCode()) {
-      setError("Code incorrect.");
+      setError("Code admin incorrect.");
       return;
     }
 
     saveAdminSession();
+    setError("");
     onAuthorized();
   }
 
   function onResetSession() {
     clearAdminSession();
-    window.location.assign("/admin");
+    window.location.replace("/admin");
   }
 
   return (
@@ -752,5 +753,5 @@ function AgencyCard({
 
 function getAdminCode() {
   const env = import.meta.env as Record<string, string | undefined>;
-  return env.NEXT_PUBLIC_ADMIN_CODE || env.VITE_ADMIN_CODE || "signature-admin";
+  return env.NEXT_PUBLIC_ADMIN_CODE?.trim() || "signature-admin";
 }
