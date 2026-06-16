@@ -13,7 +13,14 @@ import {
   Save,
   Trash2,
 } from "lucide-react";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  ChangeEvent,
+  FormEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   Field,
@@ -53,6 +60,13 @@ import {
   type PropertyPublicStatus,
 } from "@/lib/agency-saas";
 import { isValidEmail } from "@/lib/email-utils";
+import {
+  deletePropertyDocumentFile,
+  deletePropertyPhotoFile,
+  getPropertyUploadErrorMessage,
+  uploadPropertyDocument,
+  uploadPropertyPhoto,
+} from "@/lib/property-storage";
 import {
   createSharedSellerInviteForProperty,
   getSharedInviteStorageWarning,
@@ -100,13 +114,16 @@ function AgencyPropertyDetailRoute() {
   const [manualSellerInviteCopied, setManualSellerInviteCopied] =
     useState(false);
   const [sellerError, setSellerError] = useState("");
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  const documentInputRef = useRef<HTMLInputElement | null>(null);
   const [sellerForm, setSellerForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
     phone: "",
   });
-  const [photoForm, setPhotoForm] = useState({ url: "", alt: "" });
+  const [uploadingPhotos, setUploadingPhotos] = useState(false);
+  const [uploadingDocument, setUploadingDocument] = useState(false);
   const [visitForm, setVisitForm] = useState({
     date: "",
     time: "",
@@ -122,7 +139,6 @@ function AgencyPropertyDetailRoute() {
   const [documentForm, setDocumentForm] = useState({
     name: "",
     type: "Mandat" as DocumentType,
-    url: "",
     visibleToSeller: true,
   });
   const [loaded, setLoaded] = useState(false);
@@ -205,16 +221,50 @@ function AgencyPropertyDetailRoute() {
     window.setTimeout(() => setSaving(false), 250);
   }
 
-  function onAddPhoto(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!property || !photoForm.url.trim()) return;
-    const nextProperty = addPropertyPhoto(property, {
-      url: photoForm.url.trim(),
-      alt: photoForm.alt.trim() || property.title,
-    });
-    setProperty(nextProperty);
-    setPhotoForm({ url: "", alt: "" });
-    setFeedback("Photo ajoutée.");
+  async function onPhotoFilesSelected(event: ChangeEvent<HTMLInputElement>) {
+    const files = Array.from(event.target.files ?? []);
+    event.target.value = "";
+    if (!agency || !property || !files.length) return;
+
+    setUploadingPhotos(true);
+    setFeedback("Envoi des photos…");
+    let nextProperty = property;
+
+    try {
+      for (const file of files) {
+        const uploaded = await uploadPropertyPhoto({
+          agencySlug: agency.slug,
+          propertyId: property.id,
+          file,
+        });
+        nextProperty = addPropertyPhoto(nextProperty, {
+          url: uploaded.url,
+          storagePath: uploaded.path,
+          name: uploaded.name,
+          size: uploaded.size,
+          type: uploaded.type,
+          alt: property.title,
+          isMain: !nextProperty.photos.some((photo) => photo.storagePath),
+        });
+      }
+
+      setProperty(nextProperty);
+      setFeedback(files.length > 1 ? "Photos ajoutées." : "Photo ajoutée.");
+    } catch (error) {
+      console.info("Upload photo non finalisé", error);
+      setProperty(nextProperty);
+      setFeedback(getPropertyUploadErrorMessage(error, "photo"));
+    } finally {
+      setUploadingPhotos(false);
+    }
+  }
+
+  async function onDeletePhoto(photoId: string) {
+    if (!property) return;
+    const photo = property.photos.find((item) => item.id === photoId);
+    setProperty(deletePropertyPhoto(property, photoId));
+    setFeedback("Photo supprimée.");
+    await deletePropertyPhotoFile(photo?.storagePath);
   }
 
   function onAddVisit(event: FormEvent<HTMLFormElement>) {
@@ -253,21 +303,57 @@ function AgencyPropertyDetailRoute() {
 
   function onAddDocument(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!property || !documentForm.name.trim()) return;
-    const nextProperty = addPropertyDocument(property, {
-      name: documentForm.name.trim(),
-      type: documentForm.type,
-      url: documentForm.url.trim(),
-      visibleToSeller: documentForm.visibleToSeller,
-    });
-    setProperty(nextProperty);
-    setDocumentForm({
-      name: "",
-      type: "Mandat",
-      url: "",
-      visibleToSeller: true,
-    });
-    setFeedback("Document ajouté.");
+    documentInputRef.current?.click();
+  }
+
+  async function onDocumentFileSelected(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!agency || !property || !file) return;
+
+    setUploadingDocument(true);
+    setFeedback("Envoi du document…");
+
+    try {
+      const uploaded = await uploadPropertyDocument({
+        agencySlug: agency.slug,
+        propertyId: property.id,
+        file,
+      });
+      const nextProperty = addPropertyDocument(property, {
+        name: documentForm.name.trim() || getFileDisplayName(uploaded.name),
+        type: documentForm.type,
+        documentType: documentForm.type,
+        storagePath: uploaded.path,
+        url: uploaded.url,
+        fileName: uploaded.name,
+        size: uploaded.size,
+        mimeType: uploaded.type,
+        visibleToSeller: documentForm.visibleToSeller,
+      });
+      setProperty(nextProperty);
+      setDocumentForm({
+        name: "",
+        type: "Mandat",
+        visibleToSeller: true,
+      });
+      setFeedback("Document ajouté.");
+    } catch (error) {
+      console.info("Upload document non finalisé", error);
+      setFeedback(getPropertyUploadErrorMessage(error, "document"));
+    } finally {
+      setUploadingDocument(false);
+    }
+  }
+
+  async function onDeleteDocument(documentId: string) {
+    if (!property) return;
+    const document = property.propertyDocuments.find(
+      (item) => item.id === documentId,
+    );
+    setProperty(deletePropertyDocument(property, documentId));
+    setFeedback("Document supprimé.");
+    await deletePropertyDocumentFile(document?.storagePath);
   }
 
   async function onCreateSellerSpace(event?: FormEvent<HTMLFormElement>) {
@@ -634,34 +720,31 @@ function AgencyPropertyDetailRoute() {
 
         <SaasCard className="mt-7 p-6 md:p-8">
           <SectionTitle
-            title="Photos"
-            description="La photo principale alimente la page publique et l’espace vendeur."
+            title="Photos de l’annonce"
+            description="Ajoutez les photos visibles sur la fiche publique du bien."
           />
-          <form
-            className="mt-5 grid gap-3 md:grid-cols-[1fr_1fr_auto]"
-            onSubmit={onAddPhoto}
-          >
-            <Input
-              value={photoForm.url}
-              onChange={(event) =>
-                setPhotoForm({ ...photoForm, url: event.target.value })
-              }
-              placeholder="URL de la photo"
-              disabled={!canEdit}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <input
+              ref={photoInputRef}
+              type="file"
+              accept="image/*"
+              multiple
+              className="hidden"
+              onChange={onPhotoFilesSelected}
             />
-            <Input
-              value={photoForm.alt}
-              onChange={(event) =>
-                setPhotoForm({ ...photoForm, alt: event.target.value })
-              }
-              placeholder="Description"
-              disabled={!canEdit}
-            />
-            <Button className="rounded-full" disabled={!canEdit}>
+            <Button
+              type="button"
+              className="rounded-full"
+              disabled={!canEdit || uploadingPhotos}
+              onClick={() => photoInputRef.current?.click()}
+            >
               <ImagePlus className="h-4 w-4" />
-              Ajouter
+              {uploadingPhotos ? "Envoi en cours…" : "Ajouter des photos"}
             </Button>
-          </form>
+            {uploadingPhotos && (
+              <p className="text-sm text-primary/55">Envoi des photos…</p>
+            )}
+          </div>
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             {property.photos.map((photo) => (
               <div
@@ -686,7 +769,10 @@ function AgencyPropertyDetailRoute() {
                         className="rounded-full bg-white"
                         disabled={!canEdit}
                         onClick={() =>
-                          setProperty(setMainPropertyPhoto(property, photo.id))
+                          updateProperty(
+                            setMainPropertyPhoto(property, photo.id),
+                            "Photo principale mise à jour.",
+                          )
                         }
                       >
                         Définir principale
@@ -698,9 +784,7 @@ function AgencyPropertyDetailRoute() {
                       variant="outline"
                       className="rounded-full bg-white"
                       disabled={!canEdit}
-                      onClick={() =>
-                        setProperty(deletePropertyPhoto(property, photo.id))
-                      }
+                      onClick={() => onDeletePhoto(photo.id)}
                     >
                       <Trash2 className="h-4 w-4" />
                       Supprimer
@@ -1036,6 +1120,13 @@ function AgencyPropertyDetailRoute() {
               description="Mandat, diagnostics, offre et compromis peuvent être rendus visibles au vendeur."
             />
             <form className="mt-5 grid gap-3" onSubmit={onAddDocument}>
+              <input
+                ref={documentInputRef}
+                type="file"
+                accept="application/pdf,image/*,.doc,.docx"
+                className="hidden"
+                onChange={onDocumentFileSelected}
+              />
               <Input
                 value={documentForm.name}
                 onChange={(event) =>
@@ -1046,7 +1137,6 @@ function AgencyPropertyDetailRoute() {
                 }
                 placeholder="Nom du document"
                 disabled={!canEdit}
-                required
               />
               <div className="grid gap-3 sm:grid-cols-2">
                 <select
@@ -1066,17 +1156,9 @@ function AgencyPropertyDetailRoute() {
                     </option>
                   ))}
                 </select>
-                <Input
-                  value={documentForm.url}
-                  onChange={(event) =>
-                    setDocumentForm({
-                      ...documentForm,
-                      url: event.target.value,
-                    })
-                  }
-                  placeholder="URL optionnelle"
-                  disabled={!canEdit}
-                />
+                <div className="rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] px-4 py-3 text-sm text-primary/55">
+                  PDF, image, DOC ou DOCX - 20 Mo max
+                </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-primary/60">
                 <input
@@ -1092,9 +1174,12 @@ function AgencyPropertyDetailRoute() {
                 />
                 Visible dans l’espace vendeur
               </label>
-              <Button className="rounded-full" disabled={!canEdit}>
+              <Button
+                className="rounded-full"
+                disabled={!canEdit || uploadingDocument}
+              >
                 <FileText className="h-4 w-4" />
-                Ajouter
+                {uploadingDocument ? "Envoi en cours…" : "Ajouter un fichier"}
               </Button>
             </form>
             <div className="mt-6 space-y-3">
@@ -1115,7 +1200,10 @@ function AgencyPropertyDetailRoute() {
                     />
                   </div>
                   <p className="mt-1 text-sm text-primary/50">
-                    {document.type}
+                    {document.documentType ?? document.type} ·{" "}
+                    {formatDate(document.createdAt)}
+                    {document.fileName ? ` · ${document.fileName}` : ""}
+                    {document.size ? ` · ${formatFileSize(document.size)}` : ""}
                   </p>
                   <div className="mt-3 flex flex-wrap gap-2">
                     {document.url && (
@@ -1155,11 +1243,7 @@ function AgencyPropertyDetailRoute() {
                       variant="outline"
                       className="rounded-full bg-white"
                       disabled={!canEdit}
-                      onClick={() =>
-                        setProperty(
-                          deletePropertyDocument(property, document.id),
-                        )
-                      }
+                      onClick={() => onDeleteDocument(document.id)}
                     >
                       Supprimer
                     </Button>
@@ -1250,4 +1334,28 @@ function LogoutLink() {
       </Link>
     </Button>
   );
+}
+
+function getFileDisplayName(fileName: string) {
+  const trimmedName = fileName.trim();
+  if (!trimmedName) return "Document";
+  const extensionIndex = trimmedName.lastIndexOf(".");
+  return extensionIndex > 0
+    ? trimmedName.slice(0, extensionIndex)
+    : trimmedName;
+}
+
+function formatFileSize(size: number) {
+  if (!Number.isFinite(size) || size <= 0) return "";
+  if (size < 1024 * 1024) return `${Math.round(size / 1024)} Ko`;
+  return `${(size / (1024 * 1024)).toFixed(1).replace(".", ",")} Mo`;
+}
+
+function formatDate(value: string) {
+  if (!value) return "Date inconnue";
+  return new Intl.DateTimeFormat("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(value));
 }
