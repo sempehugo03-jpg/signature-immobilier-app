@@ -36,7 +36,11 @@ export function SaasShell({
   );
 }
 
-export function AdminLogoutButton({ onClick }: { onClick: () => void }) {
+export function AdminLogoutButton({
+  onClick,
+}: {
+  onClick: () => void | Promise<void>;
+}) {
   return (
     <Button
       type="button"

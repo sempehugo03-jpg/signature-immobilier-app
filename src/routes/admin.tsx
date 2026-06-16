@@ -30,7 +30,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendInviteEmail } from "@/lib/api/agency-email.functions";
 import {
-  clearAdminSession,
   isAdminSessionActive,
   isAdminCodeValid,
   saveAdminSession,
@@ -58,6 +57,10 @@ import {
   getSharedInviteStorageWarning,
   logInviteCreationFailure,
 } from "@/lib/shared-invites";
+import {
+  clearAllLocalSessions,
+  signOutEverywhere,
+} from "@/lib/session-cleanup";
 
 export const Route = createFileRoute("/admin")({
   head: () => ({
@@ -88,8 +91,8 @@ function AdminRoute() {
     setLoaded(true);
   }, []);
 
-  function onLogout() {
-    clearAdminSession();
+  async function onLogout() {
+    await signOutEverywhere();
     setAuthorized(false);
     navigate({ to: "/admin", replace: true });
   }
@@ -126,7 +129,7 @@ function AdminLogin({ onAuthorized }: { onAuthorized: () => void }) {
   }
 
   function onResetSession() {
-    clearAdminSession();
+    clearAllLocalSessions();
     window.location.replace("/admin");
   }
 

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, LogOut, Mail, Phone } from "lucide-react";
+import { ArrowLeft, Mail, Phone } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -9,6 +9,7 @@ import {
   SectionTitle,
   StatusBadge,
 } from "@/components/agency-saas-ui";
+import { SessionLogoutButton } from "@/components/session-logout-button";
 import { Button } from "@/components/ui/button";
 import {
   getAgencyBySlug,
@@ -190,16 +191,5 @@ function Info({ label, value }: { label: string; value: string }) {
 }
 
 function LogoutLink() {
-  return (
-    <Button
-      asChild
-      variant="outline"
-      className="rounded-full border-[#d8cfc2] bg-white"
-    >
-      <Link to="/">
-        <LogOut className="h-4 w-4" />
-        Déconnexion
-      </Link>
-    </Button>
-  );
+  return <SessionLogoutButton />;
 }

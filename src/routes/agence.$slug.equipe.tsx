@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { AgencyTeamManager } from "@/components/agency-team-manager";
@@ -9,6 +9,7 @@ import {
   SaasShell,
   StatusBadge,
 } from "@/components/agency-saas-ui";
+import { SessionLogoutButton } from "@/components/session-logout-button";
 import { Button } from "@/components/ui/button";
 import {
   getAgencyBySlug,
@@ -71,7 +72,11 @@ function AgencyTeamRoute() {
       />
 
       <section className="mx-auto max-w-7xl px-5 pb-16 md:px-8">
-        <Button asChild variant="outline" className="mb-7 rounded-full bg-white">
+        <Button
+          asChild
+          variant="outline"
+          className="mb-7 rounded-full bg-white"
+        >
           <Link to="/agence/$slug" params={{ slug: agency.slug }}>
             <ArrowLeft className="h-4 w-4" />
             Retour au portail
@@ -110,16 +115,5 @@ function AgencyTeamRoute() {
 }
 
 function LogoutLink() {
-  return (
-    <Button
-      asChild
-      variant="outline"
-      className="rounded-full border-[#d8cfc2] bg-white"
-    >
-      <Link to="/">
-        <LogOut className="h-4 w-4" />
-        Déconnexion
-      </Link>
-    </Button>
-  );
+  return <SessionLogoutButton />;
 }

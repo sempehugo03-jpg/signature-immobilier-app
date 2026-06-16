@@ -25,7 +25,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendInviteEmail } from "@/lib/api/agency-email.functions";
-import { clearAdminSession } from "@/lib/admin-session";
 import {
   activateAgency,
   disableAgency,
@@ -47,6 +46,7 @@ import {
   getSharedInviteStorageWarning,
   logInviteCreationFailure,
 } from "@/lib/shared-invites";
+import { signOutEverywhere } from "@/lib/session-cleanup";
 
 export const Route = createFileRoute("/admin/agencies/$slug")({
   head: () => ({
@@ -93,8 +93,8 @@ function AdminAgencyRoute() {
     setLoaded(true);
   }
 
-  function onLogout() {
-    clearAdminSession();
+  async function onLogout() {
+    await signOutEverywhere();
     window.location.assign("/admin");
   }
 

@@ -5,7 +5,6 @@ import {
   Clipboard,
   FileText,
   Home,
-  LogOut,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
@@ -15,6 +14,7 @@ import {
   SaasShell,
   StatusBadge,
 } from "@/components/agency-saas-ui";
+import { SessionLogoutButton } from "@/components/session-logout-button";
 import { Button } from "@/components/ui/button";
 import {
   findAgencyPropertyBySellerToken,
@@ -300,16 +300,5 @@ function Panel({
 }
 
 function HomeLink() {
-  return (
-    <Button
-      asChild
-      variant="outline"
-      className="rounded-full border-[#d8cfc2] bg-white"
-    >
-      <Link to="/">
-        <LogOut className="h-4 w-4" />
-        Accueil
-      </Link>
-    </Button>
-  );
+  return <SessionLogoutButton />;
 }

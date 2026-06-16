@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowLeft, CheckCircle2, LogOut } from "lucide-react";
+import { ArrowLeft, CheckCircle2 } from "lucide-react";
 import { FormEvent, useEffect, useState } from "react";
 
 import {
@@ -9,6 +9,7 @@ import {
   SaasShell,
   StatusBadge,
 } from "@/components/agency-saas-ui";
+import { SessionLogoutButton } from "@/components/session-logout-button";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendLeadNotificationEmail } from "@/lib/api/agency-email.functions";
@@ -344,16 +345,5 @@ function AgencyEstimationRoute() {
 }
 
 function LogoutLink() {
-  return (
-    <Button
-      asChild
-      variant="outline"
-      className="rounded-full border-[#d8cfc2] bg-white"
-    >
-      <Link to="/">
-        <LogOut className="h-4 w-4" />
-        Déconnexion
-      </Link>
-    </Button>
-  );
+  return <SessionLogoutButton />;
 }

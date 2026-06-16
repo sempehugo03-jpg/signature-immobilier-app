@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
 
 import { SiteLayout } from "@/components/site-layout";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdminCodeValid, saveAdminSession } from "@/lib/admin-session";
+import { signOutEverywhere } from "@/lib/session-cleanup";
 import { supabase } from "@/lib/supabase";
 
 type CurrentAccessResult =
@@ -58,31 +59,7 @@ function MonSuiviPage() {
   const [showAdminAccess, setShowAdminAccess] = useState(false);
   const [adminCode, setAdminCode] = useState("");
   const [adminError, setAdminError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (loading || !session?.access_token) return;
-
-    let active = true;
-    setResolvingSession(true);
-    resolveCurrentAccess(session.access_token)
-      .then((result) => {
-        if (!active) return;
-
-        if (result.ok) {
-          window.location.replace(result.destination);
-          return;
-        }
-
-        setError(result.message);
-      })
-      .finally(() => {
-        if (active) setResolvingSession(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loading, session?.access_token]);
+  const currentSessionEmail = session?.user?.email ?? "";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -112,8 +89,27 @@ function MonSuiviPage() {
       return;
     }
 
-    const accessResult = await resolveCurrentAccess(accessToken);
     setSubmitting(false);
+    await redirectToCurrentUserSpace(accessToken);
+  }
+
+  async function redirectToCurrentUserSpace(accessToken?: string) {
+    setResolvingSession(true);
+    setError(null);
+
+    const token =
+      accessToken ??
+      session?.access_token ??
+      (await supabase.auth.getSession()).data.session?.access_token;
+
+    if (!token) {
+      setResolvingSession(false);
+      setError(UNKNOWN_LOGIN_MESSAGE);
+      return;
+    }
+
+    const accessResult = await resolveCurrentAccess(token);
+    setResolvingSession(false);
 
     if (!accessResult.ok) {
       setError(accessResult.message);
@@ -121,6 +117,17 @@ function MonSuiviPage() {
     }
 
     window.location.assign(accessResult.destination);
+  }
+
+  async function onChangeAccount() {
+    setResolvingSession(true);
+    await signOutEverywhere();
+    setEmail("");
+    setPassword("");
+    setError(null);
+    setAdminError(null);
+    setAdminCode("");
+    setResolvingSession(false);
   }
 
   function onAdminSubmit(event: FormEvent<HTMLFormElement>) {
@@ -167,6 +174,36 @@ function MonSuiviPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              {!loading && currentSessionEmail && (
+                <div className="mb-5 rounded-2xl border border-[#e8e0d5] bg-[#fffdf9] p-4">
+                  <p className="text-sm font-medium text-primary">
+                    Vous êtes déjà connecté avec {currentSessionEmail}.
+                  </p>
+                  <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                    <Button
+                      type="button"
+                      className="rounded-full"
+                      onClick={() => redirectToCurrentUserSpace()}
+                      disabled={resolvingSession}
+                    >
+                      {resolvingSession
+                        ? "Ouverture..."
+                        : "Continuer vers mon espace"}
+                      <ArrowRight className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="rounded-full bg-white"
+                      onClick={onChangeAccount}
+                      disabled={resolvingSession}
+                    >
+                      Changer de compte
+                    </Button>
+                  </div>
+                </div>
+              )}
+
               <form className="space-y-4" onSubmit={onSubmit}>
                 {error && (
                   <Alert variant="destructive">
