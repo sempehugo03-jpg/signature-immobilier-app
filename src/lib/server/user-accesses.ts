@@ -223,8 +223,8 @@ export function getUserAccessDestination(access: UserAccessRecord) {
     return `/agence/${encodePathSegment(access.agencySlug)}`;
   }
 
-  if (access.role === "seller" && access.agencySlug && access.sellerToken) {
-    return `/agence/${encodePathSegment(access.agencySlug)}/vendeur/${encodePathSegment(access.sellerToken)}`;
+  if (access.role === "seller" && access.sellerToken) {
+    return `/vendeur/${encodePathSegment(access.sellerToken)}`;
   }
 
   return "";
