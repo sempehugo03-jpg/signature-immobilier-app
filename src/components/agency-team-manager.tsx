@@ -110,9 +110,25 @@ export function AgencyTeamManager({
       throw new MemberInviteUiError("Email invalide.");
     }
 
-    let member: TeamMember;
+    const member = buildPendingTeamMember(agencyId, role, data);
+
+    const inviteReady = await sendInvitation(
+      member,
+      role === "manager" ? "Patron ajouté" : "Agent ajouté",
+    );
+
+    if (!inviteReady.ok) {
+      setFeedback(
+        role === "manager"
+          ? `Patron non ajouté. ${inviteReady.message}`
+          : `Agent non ajouté. ${inviteReady.message}`,
+      );
+      throw new MemberInviteUiError(inviteReady.message);
+    }
+
     try {
-      member = addTeamMember(agencyId, {
+      addTeamMember(agencyId, {
+        id: member.id,
         ...data,
         role,
         status: "invited",
@@ -131,22 +147,6 @@ export function AgencyTeamManager({
           : "Impossible d’ajouter cet agent. Vérifiez les informations puis réessayez.",
       );
       throw error;
-    }
-
-    const inviteReady = await sendInvitation(
-      member,
-      role === "manager" ? "Patron ajouté" : "Agent ajouté",
-    );
-
-    if (!inviteReady.ok) {
-      deleteTeamMember(member.id);
-      refresh();
-      setFeedback(
-        role === "manager"
-          ? `Patron non ajouté. ${inviteReady.message}`
-          : `Agent non ajouté. ${inviteReady.message}`,
-      );
-      throw new MemberInviteUiError(inviteReady.message);
     }
 
     try {
@@ -711,6 +711,34 @@ function getMemberStatusLabel(status: TeamMember["status"]) {
   if (status === "active") return "actif";
   if (status === "invited") return "invité";
   return "désactivé";
+}
+
+function buildPendingTeamMember(
+  agencyId: string,
+  role: TeamRole,
+  data: MemberFormData,
+): TeamMember {
+  const now = new Date().toISOString();
+  return {
+    id: createPendingTeamMemberId(),
+    agencyId,
+    firstName: data.firstName.trim(),
+    lastName: data.lastName.trim(),
+    email: data.email.trim().toLowerCase(),
+    phone: data.phone.trim(),
+    role,
+    status: "invited",
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+function createPendingTeamMemberId() {
+  if (globalThis.crypto && "randomUUID" in globalThis.crypto) {
+    return `member-${globalThis.crypto.randomUUID()}`;
+  }
+
+  return `member-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 class MemberInviteUiError extends Error {

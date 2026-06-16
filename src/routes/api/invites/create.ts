@@ -5,27 +5,21 @@ import { isInviteAccessType } from "@/lib/invite-email";
 import { buildInviteUrl } from "@/lib/invite-tokens";
 import {
   createInviteToken,
-  isSharedInviteStoreConfigured,
+  inviteTokenApiError,
   normalizeCreateInviteTokenInput,
 } from "@/lib/server/invite-tokens";
 
 type InviteCreateErrorCode =
-  | "missing_supabase"
-  | "missing_table"
   | "missing_agency"
   | "invalid_email"
-  | "unknown_error";
+  | "invalid_payload";
 
 const inviteCreateErrorMessages: Record<InviteCreateErrorCode, string> = {
-  missing_supabase:
-    "Impossible de créer le lien d’invitation : base de données non configurée.",
-  missing_table:
-    "Impossible de créer le lien d’invitation : table invite_tokens absente.",
   missing_agency:
     "Impossible de créer le lien d’invitation : agence introuvable.",
   invalid_email: "Email invalide.",
-  unknown_error:
-    "Impossible de créer le lien d’invitation. Consultez la console pour le détail.",
+  invalid_payload:
+    "Impossible de créer le lien d’invitation : données invalides.",
 };
 
 export const Route = createFileRoute("/api/invites/create")({
@@ -40,11 +34,7 @@ export const Route = createFileRoute("/api/invites/create")({
 
         const input = normalizeCreateInviteTokenInput(payload);
         if (!input) {
-          return inviteCreateError("unknown_error", 400);
-        }
-
-        if (!isSharedInviteStoreConfigured()) {
-          return inviteCreateError("missing_supabase", 503);
+          return inviteCreateError("invalid_payload", 400);
         }
 
         try {
@@ -57,11 +47,14 @@ export const Route = createFileRoute("/api/invites/create")({
           });
         } catch (error) {
           logInviteCreationError(error);
-          return inviteCreateError(
-            isMissingInviteTokensTableError(error)
-              ? "missing_table"
-              : "unknown_error",
-            503,
+          const apiError = inviteTokenApiError(error);
+          return Response.json(
+            {
+              ok: false,
+              code: apiError.code,
+              message: apiError.message,
+            },
+            { status: apiError.status },
           );
         }
       },
@@ -98,7 +91,7 @@ function inviteCreateError(code: InviteCreateErrorCode, status: number) {
 }
 
 function getPayloadErrorCode(payload: unknown): InviteCreateErrorCode | null {
-  if (!isRecord(payload)) return "unknown_error";
+  if (!isRecord(payload)) return "invalid_payload";
 
   const agencyId = stringValue(payload.agencyId);
   const agencySlug = stringValue(payload.agencySlug);
@@ -108,7 +101,7 @@ function getPayloadErrorCode(payload: unknown): InviteCreateErrorCode | null {
 
   if (!agencyId || !agencySlug) return "missing_agency";
   if (!isValidEmail(email)) return "invalid_email";
-  if (!isInviteAccessType(type)) return "unknown_error";
+  if (!isInviteAccessType(type)) return "invalid_payload";
   if ((type === "manager_invite" || type === "agent_invite") && !teamMemberId) {
     return "missing_agency";
   }
@@ -123,32 +116,6 @@ function logInviteCreationError(error: unknown) {
   }
 
   console.warn("Invite creation failed", error);
-}
-
-function isMissingInviteTokensTableError(error: unknown) {
-  const details = [
-    readErrorField(error, "code"),
-    readErrorField(error, "message"),
-    readErrorField(error, "details"),
-    readErrorField(error, "hint"),
-  ]
-    .join(" ")
-    .toLowerCase();
-
-  return (
-    details.includes("42p01") ||
-    details.includes("pgrst205") ||
-    (details.includes("invite_tokens") &&
-      (details.includes("does not exist") ||
-        details.includes("schema cache") ||
-        details.includes("relation")))
-  );
-}
-
-function readErrorField(error: unknown, field: string) {
-  if (!isRecord(error)) return "";
-  const value = error[field];
-  return typeof value === "string" ? value : "";
 }
 
 function stringValue(value: unknown) {
