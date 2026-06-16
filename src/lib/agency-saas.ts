@@ -44,6 +44,10 @@ export type PropertyPhoto = {
   id: string;
   propertyId: string;
   url: string;
+  storagePath?: string;
+  name?: string;
+  size?: number;
+  type?: string;
   alt: string;
   isMain: boolean;
   order: number;
@@ -77,7 +81,12 @@ export type PropertyDocument = {
   propertyId: string;
   name: string;
   type: DocumentType;
+  documentType?: DocumentType;
+  storagePath?: string;
   url: string;
+  fileName?: string;
+  size?: number;
+  mimeType?: string;
   visibleToSeller: boolean;
   createdAt: string;
 };
@@ -728,13 +737,19 @@ export function updateAgencyProperty(
 export function addPropertyPhoto(
   property: AgencyProperty,
   data: Pick<PropertyPhoto, "url" | "alt"> &
-    Partial<Pick<PropertyPhoto, "isMain">>,
+    Partial<
+      Pick<PropertyPhoto, "storagePath" | "name" | "size" | "type" | "isMain">
+    >,
 ) {
   const now = new Date().toISOString();
   const photo: PropertyPhoto = {
     id: `photo-${Date.now()}-${randomId()}`,
     propertyId: property.id,
     url: data.url.trim(),
+    storagePath: data.storagePath?.trim() ?? "",
+    name: data.name?.trim() ?? "",
+    size: data.size ?? 0,
+    type: data.type?.trim() ?? "",
     alt: data.alt.trim() || property.title,
     isMain: Boolean(data.isMain) || property.photos.length === 0,
     order: property.photos.length + 1,
@@ -865,12 +880,24 @@ export function deleteVisitReport(property: AgencyProperty, reportId: string) {
 
 export function addPropertyDocument(
   property: AgencyProperty,
-  data: Omit<PropertyDocument, "id" | "propertyId" | "createdAt">,
+  data: Pick<PropertyDocument, "name" | "type" | "url" | "visibleToSeller"> &
+    Partial<
+      Pick<
+        PropertyDocument,
+        "documentType" | "storagePath" | "fileName" | "size" | "mimeType"
+      >
+    >,
 ) {
   const document: PropertyDocument = {
     ...data,
     id: `document-${Date.now()}-${randomId()}`,
     propertyId: property.id,
+    type: data.type,
+    documentType: data.documentType ?? data.type,
+    storagePath: data.storagePath?.trim() ?? "",
+    fileName: data.fileName?.trim() ?? "",
+    size: data.size ?? 0,
+    mimeType: data.mimeType?.trim() ?? "",
     createdAt: new Date().toISOString(),
   };
   return updateAgencyProperty(property, {
@@ -2042,6 +2069,10 @@ function coercePropertyPhotos(
             id: safeString(photo.id, `photo-${propertyId}-${index + 1}`),
             propertyId: safeString(photo.propertyId, propertyId),
             url: safeString(photo.url),
+            storagePath: safeString(photo.storagePath),
+            name: safeString(photo.name),
+            size: Number(photo.size) || 0,
+            type: safeString(photo.type),
             alt: safeString(photo.alt, title),
             isMain: Boolean(photo.isMain),
             order: Number(photo.order) || index + 1,
@@ -2057,6 +2088,10 @@ function coercePropertyPhotos(
         id: `photo-${propertyId}-main`,
         propertyId,
         url: fallbackUrl,
+        storagePath: "",
+        name: "",
+        size: 0,
+        type: "",
         alt: title,
         isMain: true,
         order: 1,
@@ -2125,7 +2160,16 @@ function coercePropertyDocuments(
           propertyId: safeString(document.propertyId, propertyId),
           name: safeString(document.name, "Document"),
           type: isDocumentType(document.type) ? document.type : "Autre",
+          documentType: isDocumentType(document.documentType)
+            ? document.documentType
+            : isDocumentType(document.type)
+              ? document.type
+              : "Autre",
+          storagePath: safeString(document.storagePath),
           url: safeString(document.url),
+          fileName: safeString(document.fileName),
+          size: Number(document.size) || 0,
+          mimeType: safeString(document.mimeType),
           visibleToSeller:
             typeof document.visibleToSeller === "boolean"
               ? document.visibleToSeller
@@ -2142,7 +2186,12 @@ function coercePropertyDocuments(
     propertyId,
     name,
     type: isDocumentType(name) ? name : "Autre",
+    documentType: isDocumentType(name) ? name : "Autre",
+    storagePath: "",
     url: "",
+    fileName: "",
+    size: 0,
+    mimeType: "",
     visibleToSeller: true,
     createdAt: now,
   }));
