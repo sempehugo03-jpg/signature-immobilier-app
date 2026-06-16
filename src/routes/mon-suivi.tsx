@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { FormEvent, useEffect, useState } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
 
@@ -15,7 +15,24 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
-import { getDashboardPath, supabase } from "@/lib/supabase";
+import { supabase } from "@/lib/supabase";
+
+type CurrentAccessResult =
+  | {
+      ok: true;
+      destination: string;
+    }
+  | {
+      ok: false;
+      code?: string;
+      message: string;
+    };
+
+const BAD_CREDENTIALS_MESSAGE = "Email ou mot de passe incorrect.";
+const NO_ACCESS_MESSAGE =
+  "Votre compte existe, mais aucun espace n’est associé à cet email.";
+const UNKNOWN_LOGIN_MESSAGE =
+  "Impossible de vous connecter pour le moment. Réessayez.";
 
 export const Route = createFileRoute("/mon-suivi")({
   head: () => ({
@@ -31,44 +48,75 @@ export const Route = createFileRoute("/mon-suivi")({
 });
 
 function MonSuiviPage() {
-  const navigate = useNavigate();
-  const { loading, profile, refreshProfile } = useAuth();
+  const { loading, session } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [resolvingSession, setResolvingSession] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!loading && profile) {
-      navigate({ to: getDashboardPath(profile.role), replace: true });
-    }
-  }, [loading, navigate, profile]);
+    if (loading || !session?.access_token) return;
+
+    let active = true;
+    setResolvingSession(true);
+    resolveCurrentAccess(session.access_token)
+      .then((result) => {
+        if (!active) return;
+
+        if (result.ok) {
+          window.location.replace(result.destination);
+          return;
+        }
+
+        setError(result.message);
+      })
+      .finally(() => {
+        if (active) setResolvingSession(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [loading, session?.access_token]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
 
-    const { error: signInError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    const { data, error: signInError } = await supabase.auth.signInWithPassword(
+      {
+        email,
+        password,
+      },
+    );
 
     if (signInError) {
       setSubmitting(false);
-      setError(signInError.message);
+      setError(getSignInErrorMessage(signInError.message));
       return;
     }
 
-    const nextProfile = await refreshProfile();
+    const accessToken =
+      data.session?.access_token ??
+      (await supabase.auth.getSession()).data.session?.access_token;
+
+    if (!accessToken) {
+      setSubmitting(false);
+      setError(UNKNOWN_LOGIN_MESSAGE);
+      return;
+    }
+
+    const accessResult = await resolveCurrentAccess(accessToken);
     setSubmitting(false);
 
-    if (!nextProfile) {
-      setError("Connexion réussie, mais aucun rôle n’est associé à ce compte.");
+    if (!accessResult.ok) {
+      setError(accessResult.message);
       return;
     }
 
-    navigate({ to: getDashboardPath(nextProfile.role), replace: true });
+    window.location.assign(accessResult.destination);
   }
 
   return (
@@ -136,9 +184,11 @@ function MonSuiviPage() {
                 <Button
                   className="w-full rounded-full"
                   size="lg"
-                  disabled={submitting}
+                  disabled={submitting || resolvingSession}
                 >
-                  {submitting ? "Connexion..." : "Accéder à mon espace"}
+                  {submitting || resolvingSession
+                    ? "Connexion..."
+                    : "Accéder à mon espace"}
                   <ArrowRight className="h-4 w-4" />
                 </Button>
               </form>
@@ -148,4 +198,82 @@ function MonSuiviPage() {
       </section>
     </SiteLayout>
   );
+}
+
+async function resolveCurrentAccess(
+  accessToken: string,
+): Promise<CurrentAccessResult> {
+  try {
+    const response = await fetch("/api/accesses/current", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    });
+    const body = await readJsonResponse(response);
+
+    if (
+      response.ok &&
+      isRecord(body) &&
+      body.ok === true &&
+      typeof body.destination === "string" &&
+      body.destination
+    ) {
+      return {
+        ok: true,
+        destination: body.destination,
+      };
+    }
+
+    if (isRecord(body)) {
+      return {
+        ok: false,
+        code: typeof body.code === "string" ? body.code : undefined,
+        message:
+          typeof body.message === "string" && body.message
+            ? body.message
+            : getAccessErrorMessage(body.code),
+      };
+    }
+
+    return {
+      ok: false,
+      message: UNKNOWN_LOGIN_MESSAGE,
+    };
+  } catch {
+    return {
+      ok: false,
+      message: UNKNOWN_LOGIN_MESSAGE,
+    };
+  }
+}
+
+async function readJsonResponse(response: Response) {
+  try {
+    return (await response.json()) as unknown;
+  } catch {
+    return null;
+  }
+}
+
+function getAccessErrorMessage(code: unknown) {
+  if (code === "no_access") return NO_ACCESS_MESSAGE;
+  return UNKNOWN_LOGIN_MESSAGE;
+}
+
+function getSignInErrorMessage(message: string) {
+  const details = message.toLowerCase();
+  if (
+    details.includes("invalid login credentials") ||
+    details.includes("invalid credentials") ||
+    details.includes("credentials")
+  ) {
+    return BAD_CREDENTIALS_MESSAGE;
+  }
+
+  return UNKNOWN_LOGIN_MESSAGE;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }

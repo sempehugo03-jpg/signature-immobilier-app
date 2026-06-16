@@ -6,9 +6,16 @@ import {
 } from "@/lib/invite-tokens";
 import {
   getInviteToken,
+  InviteTokenServerError,
   inviteTokenApiError,
   markInviteTokenUsed,
 } from "@/lib/server/invite-tokens";
+import {
+  createOrUpdateInviteAuthUser,
+  getUserAccessDestination,
+  upsertUserAccessFromInvite,
+  userAccessApiError,
+} from "@/lib/server/user-accesses";
 
 export const Route = createFileRoute("/api/invites/complete")({
   server: {
@@ -58,16 +65,28 @@ export const Route = createFileRoute("/api/invites/complete")({
             );
           }
 
+          const authUser = await createOrUpdateInviteAuthUser(record, password);
+          const access = await upsertUserAccessFromInvite(record);
           const usedRecord = await markInviteTokenUsed(token);
           return Response.json({
             ok: true,
             status: "used",
-            destination: getInviteDestination(usedRecord),
+            destination:
+              getUserAccessDestination(access) ||
+              getInviteDestination(usedRecord),
+            email: access.email,
+            role: access.role,
+            agencySlug: access.agencySlug,
+            authUser,
+            access,
             record: usedRecord,
           });
         } catch (error) {
           console.warn("Invitation Supabase non validée", error);
-          const apiError = inviteTokenApiError(error);
+          const apiError =
+            error instanceof InviteTokenServerError
+              ? inviteTokenApiError(error)
+              : userAccessApiError(error);
           return Response.json(
             {
               ok: false,

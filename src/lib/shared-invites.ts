@@ -92,8 +92,11 @@ export type InviteApiErrorCode =
   | "missing_supabase_url"
   | "missing_service_role_key"
   | "missing_invite_tokens_table"
+  | "missing_user_accesses_table"
   | "supabase_permission_error"
   | "supabase_unknown_error"
+  | "auth_creation_failed"
+  | "account_exists"
   | "not_found"
   | "used"
   | "invalid"
@@ -111,9 +114,15 @@ const inviteCreationErrorMessages: Record<InviteApiErrorCode, string> = {
   missing_service_role_key: "SUPABASE_SERVICE_ROLE_KEY manquante côté serveur.",
   missing_invite_tokens_table:
     "Table invite_tokens absente. Exécutez la migration Supabase.",
+  missing_user_accesses_table:
+    "Table user_accesses absente. Exécutez la migration Supabase.",
   supabase_permission_error:
     "Erreur de permission Supabase. Vérifiez SUPABASE_SERVICE_ROLE_KEY.",
   supabase_unknown_error: "Erreur Supabase inconnue.",
+  auth_creation_failed:
+    "Impossible de créer le compte utilisateur pour le moment.",
+  account_exists:
+    "Un compte existe déjà pour cet email. Connectez-vous depuis Mon suivi.",
   not_found: "Lien invalide ou expiré.",
   used: "Ce lien a déjà été utilisé.",
   invalid: "Lien invalide ou expiré.",
@@ -503,8 +512,11 @@ function isInviteCreationErrorCode(
     value === "missing_supabase_url" ||
     value === "missing_service_role_key" ||
     value === "missing_invite_tokens_table" ||
+    value === "missing_user_accesses_table" ||
     value === "supabase_permission_error" ||
     value === "supabase_unknown_error" ||
+    value === "auth_creation_failed" ||
+    value === "account_exists" ||
     value === "not_found" ||
     value === "used" ||
     value === "invalid" ||
@@ -532,6 +544,7 @@ function isInviteInfrastructureErrorCode(code: InviteApiErrorCode) {
     code === "missing_supabase_url" ||
     code === "missing_service_role_key" ||
     code === "missing_invite_tokens_table" ||
+    code === "missing_user_accesses_table" ||
     code === "supabase_permission_error" ||
     code === "supabase_unknown_error"
   );

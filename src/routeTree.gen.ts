@@ -40,6 +40,7 @@ import { Route as DemoAgenceSlugAgentRouteImport } from './routes/demo-agence.$s
 import { Route as ApiInvitesCreateRouteImport } from './routes/api/invites/create'
 import { Route as ApiInvitesCompleteRouteImport } from './routes/api/invites/complete'
 import { Route as ApiInvitesTokenRouteImport } from './routes/api/invites/$token'
+import { Route as ApiAccessesCurrentRouteImport } from './routes/api/accesses/current'
 import { Route as AgentPropertiesIdRouteImport } from './routes/agent.properties.$id'
 import { Route as AgenceSlugSettingsRouteImport } from './routes/agence.$slug.settings'
 import { Route as AgenceSlugEstimationsRouteImport } from './routes/agence.$slug.estimations'
@@ -208,6 +209,11 @@ const ApiInvitesTokenRoute = ApiInvitesTokenRouteImport.update({
   path: '/api/invites/$token',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ApiAccessesCurrentRoute = ApiAccessesCurrentRouteImport.update({
+  id: '/api/accesses/current',
+  path: '/api/accesses/current',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentPropertiesIdRoute = AgentPropertiesIdRouteImport.update({
   id: '/properties/$id',
   path: '/properties/$id',
@@ -301,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/accesses/current': typeof ApiAccessesCurrentRoute
   '/api/invites/$token': typeof ApiInvitesTokenRoute
   '/api/invites/complete': typeof ApiInvitesCompleteRoute
   '/api/invites/create': typeof ApiInvitesCreateRoute
@@ -345,6 +352,7 @@ export interface FileRoutesByTo {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/accesses/current': typeof ApiAccessesCurrentRoute
   '/api/invites/$token': typeof ApiInvitesTokenRoute
   '/api/invites/complete': typeof ApiInvitesCompleteRoute
   '/api/invites/create': typeof ApiInvitesCreateRoute
@@ -390,6 +398,7 @@ export interface FileRoutesById {
   '/agence/$slug/estimations': typeof AgenceSlugEstimationsRoute
   '/agence/$slug/settings': typeof AgenceSlugSettingsRoute
   '/agent/properties/$id': typeof AgentPropertiesIdRoute
+  '/api/accesses/current': typeof ApiAccessesCurrentRoute
   '/api/invites/$token': typeof ApiInvitesTokenRoute
   '/api/invites/complete': typeof ApiInvitesCompleteRoute
   '/api/invites/create': typeof ApiInvitesCreateRoute
@@ -436,6 +445,7 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/accesses/current'
     | '/api/invites/$token'
     | '/api/invites/complete'
     | '/api/invites/create'
@@ -480,6 +490,7 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/accesses/current'
     | '/api/invites/$token'
     | '/api/invites/complete'
     | '/api/invites/create'
@@ -524,6 +535,7 @@ export interface FileRouteTypes {
     | '/agence/$slug/estimations'
     | '/agence/$slug/settings'
     | '/agent/properties/$id'
+    | '/api/accesses/current'
     | '/api/invites/$token'
     | '/api/invites/complete'
     | '/api/invites/create'
@@ -562,6 +574,7 @@ export interface RootRouteChildren {
   DemoAgenceSlugRoute: typeof DemoAgenceSlugRouteWithChildren
   AgenceIndexRoute: typeof AgenceIndexRoute
   AccesAgenceTokenRoute: typeof AccesAgenceTokenRoute
+  ApiAccessesCurrentRoute: typeof ApiAccessesCurrentRoute
   ApiInvitesTokenRoute: typeof ApiInvitesTokenRoute
   ApiInvitesCompleteRoute: typeof ApiInvitesCompleteRoute
   ApiInvitesCreateRoute: typeof ApiInvitesCreateRoute
@@ -786,6 +799,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiInvitesTokenRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/api/accesses/current': {
+      id: '/api/accesses/current'
+      path: '/api/accesses/current'
+      fullPath: '/api/accesses/current'
+      preLoaderRoute: typeof ApiAccessesCurrentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agent/properties/$id': {
       id: '/agent/properties/$id'
       path: '/properties/$id'
@@ -957,6 +977,7 @@ const rootRouteChildren: RootRouteChildren = {
   DemoAgenceSlugRoute: DemoAgenceSlugRouteWithChildren,
   AgenceIndexRoute: AgenceIndexRoute,
   AccesAgenceTokenRoute: AccesAgenceTokenRoute,
+  ApiAccessesCurrentRoute: ApiAccessesCurrentRoute,
   ApiInvitesTokenRoute: ApiInvitesTokenRoute,
   ApiInvitesCompleteRoute: ApiInvitesCompleteRoute,
   ApiInvitesCreateRoute: ApiInvitesCreateRoute,
