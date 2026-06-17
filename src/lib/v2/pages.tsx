@@ -1088,7 +1088,7 @@ export function AdminDashboardV2Page() {
             <Panel key={href} className="p-5">
               <h3 className="font-display text-3xl">{label}</h3>
               <Button asChild variant="outline" className="mt-4 rounded-full bg-white">
-                <a href={href}>Ouvrir</a>
+                <Link to={href}>Ouvrir</Link>
               </Button>
             </Panel>
           ))}
@@ -1439,9 +1439,9 @@ function PrivateShell({
           <div className="font-display text-xl">{title}</div>
           <div className="flex items-center gap-2 overflow-auto">
             {links.map(([label, href]) => (
-              <a key={href} href={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
+              <Link key={href} to={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
                 {label}
-              </a>
+              </Link>
             ))}
             <SessionLogoutButton />
           </div>
