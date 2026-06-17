@@ -28,6 +28,7 @@ import { Route as ActivationPatronRouteImport } from './routes/activation-patron
 import { Route as ActivationAgentRouteImport } from './routes/activation-agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as VendeurSellerTokenRouteImport } from './routes/vendeur.$sellerToken'
 import { Route as DemoAgenceSlugRouteImport } from './routes/demo-agence.$slug'
 import { Route as CreerAccesTokenRouteImport } from './routes/creer-acces.$token'
@@ -167,6 +168,11 @@ const AgenceIndexRoute = AgenceIndexRouteImport.update({
   id: '/agence/',
   path: '/agence/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const VendeurSellerTokenRoute = VendeurSellerTokenRouteImport.update({
   id: '/$sellerToken',
@@ -430,6 +436,7 @@ export interface FileRoutesByFullPath {
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
   '/vendeur/$sellerToken': typeof VendeurSellerTokenRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/agence/': typeof AgenceIndexRoute
   '/a/$agencySlug/biens': typeof AAgencySlugBiensRouteWithChildren
   '/a/$agencySlug/estimation': typeof AAgencySlugEstimationRoute
@@ -470,7 +477,6 @@ export interface FileRoutesByTo {
   '/activation-agent': typeof ActivationAgentRoute
   '/activation-patron': typeof ActivationPatronRoute
   '/activation-vendeur': typeof ActivationVendeurRoute
-  '/admin': typeof AdminRouteWithChildren
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
@@ -495,6 +501,7 @@ export interface FileRoutesByTo {
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
   '/vendeur/$sellerToken': typeof VendeurSellerTokenRouteWithChildren
+  '/admin': typeof AdminIndexRoute
   '/agence': typeof AgenceIndexRoute
   '/a/$agencySlug/biens': typeof AAgencySlugBiensRouteWithChildren
   '/a/$agencySlug/estimation': typeof AAgencySlugEstimationRoute
@@ -561,6 +568,7 @@ export interface FileRoutesById {
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
   '/vendeur/$sellerToken': typeof VendeurSellerTokenRouteWithChildren
+  '/admin/': typeof AdminIndexRoute
   '/agence/': typeof AgenceIndexRoute
   '/a/$agencySlug/biens': typeof AAgencySlugBiensRouteWithChildren
   '/a/$agencySlug/estimation': typeof AAgencySlugEstimationRoute
@@ -628,6 +636,7 @@ export interface FileRouteTypes {
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
     | '/vendeur/$sellerToken'
+    | '/admin/'
     | '/agence/'
     | '/a/$agencySlug/biens'
     | '/a/$agencySlug/estimation'
@@ -668,7 +677,6 @@ export interface FileRouteTypes {
     | '/activation-agent'
     | '/activation-patron'
     | '/activation-vendeur'
-    | '/admin'
     | '/admin-agence'
     | '/agent'
     | '/agent-dashboard'
@@ -693,6 +701,7 @@ export interface FileRouteTypes {
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
     | '/vendeur/$sellerToken'
+    | '/admin'
     | '/agence'
     | '/a/$agencySlug/biens'
     | '/a/$agencySlug/estimation'
@@ -758,6 +767,7 @@ export interface FileRouteTypes {
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
     | '/vendeur/$sellerToken'
+    | '/admin/'
     | '/agence/'
     | '/a/$agencySlug/biens'
     | '/a/$agencySlug/estimation'
@@ -961,6 +971,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/agence/'
       preLoaderRoute: typeof AgenceIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/vendeur/$sellerToken': {
       id: '/vendeur/$sellerToken'
@@ -1303,6 +1320,7 @@ interface AdminRouteChildren {
   AdminAgencesRoute: typeof AdminAgencesRouteWithChildren
   AdminPreviewStudioRoute: typeof AdminPreviewStudioRouteWithChildren
   AdminTarifsRoute: typeof AdminTarifsRoute
+  AdminIndexRoute: typeof AdminIndexRoute
   AdminAgenciesSlugRoute: typeof AdminAgenciesSlugRoute
 }
 
@@ -1311,6 +1329,7 @@ const AdminRouteChildren: AdminRouteChildren = {
   AdminAgencesRoute: AdminAgencesRouteWithChildren,
   AdminPreviewStudioRoute: AdminPreviewStudioRouteWithChildren,
   AdminTarifsRoute: AdminTarifsRoute,
+  AdminIndexRoute: AdminIndexRoute,
   AdminAgenciesSlugRoute: AdminAgenciesSlugRoute,
 }
 
