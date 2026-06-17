@@ -1065,8 +1065,8 @@ export function AdminDashboardV2Page() {
   return (
     <AdminShell>
       <Header title="Dashboard global Signature" text="Demos, agences, abonnements, alertes et paiements." >
-        <Button asChild className="rounded-full">
-          <Link to="/admin/preview-studio/nouveau">Creer une demo agence</Link>
+        <Button className="rounded-full" onClick={() => goTo("/admin/preview-studio/nouveau")}>
+          Creer une demo agence
         </Button>
       </Header>
       <Section>
@@ -1085,14 +1085,14 @@ export function AdminDashboardV2Page() {
             ["/admin/tarifs", "Tarifs"],
             ["/admin/abonnements", "Abonnements"],
           ].map(([href, label]) => (
-            <Link key={href} to={href} className="block">
+            <button key={href} type="button" onClick={() => goTo(href)} className="block w-full text-left">
               <Panel className="p-5">
                 <h3 className="font-display text-3xl">{label}</h3>
                 <span className="mt-4 inline-flex rounded-full border border-[#e8e0d5] bg-white px-4 py-2 text-sm font-medium">
                   Ouvrir
                 </span>
               </Panel>
-            </Link>
+            </button>
           ))}
         </div>
       </Section>
@@ -1408,10 +1408,15 @@ function AgencyShell({ agency, children }: { agency: Agency; children: ReactNode
   );
 }
 
+function goTo(path: string) {
+  window.location.assign(path);
+}
+
 function AdminShell({ children }: { children: ReactNode }) {
   return (
     <PrivateShell
       title="Signature Admin"
+      useBrowserNavigation
       links={[
         ["Dashboard", "/admin"],
         ["Preview Studio", "/admin/preview-studio"],
@@ -1429,10 +1434,12 @@ function PrivateShell({
   title,
   links,
   children,
+  useBrowserNavigation = false,
 }: {
   title: string;
   links: string[][];
   children: ReactNode;
+  useBrowserNavigation?: boolean;
 }) {
   return (
     <div className="min-h-screen bg-[#faf7f0] text-primary">
@@ -1440,11 +1447,22 @@ function PrivateShell({
         <div className="mx-auto flex min-h-20 max-w-7xl flex-col gap-3 px-5 py-4 md:flex-row md:items-center md:justify-between md:px-8">
           <div className="font-display text-xl">{title}</div>
           <div className="flex items-center gap-2 overflow-auto">
-            {links.map(([label, href]) => (
-              <Link key={href} to={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
-                {label}
-              </Link>
-            ))}
+            {links.map(([label, href]) =>
+              useBrowserNavigation ? (
+                <button
+                  key={href}
+                  type="button"
+                  onClick={() => goTo(href)}
+                  className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm"
+                >
+                  {label}
+                </button>
+              ) : (
+                <Link key={href} to={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
+                  {label}
+                </Link>
+              ),
+            )}
             <SessionLogoutButton />
           </div>
         </div>
