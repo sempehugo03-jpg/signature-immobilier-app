@@ -702,6 +702,48 @@ export function createTeamInvite(
   return { ...state, teamMembers: [member, ...state.teamMembers] };
 }
 
+export function createDemoAgency(
+  state: V2State,
+  input: {
+    name: string;
+    city: string;
+    phone: string;
+    email: string;
+    primaryColor?: string;
+    logoUrl?: string;
+  },
+) {
+  const agencyId = makeId("agency");
+  const agencySlug = slugify(input.name);
+  const agency: Agency = {
+    id: agencyId,
+    slug: agencySlug,
+    name: input.name,
+    city: input.city,
+    phone: input.phone,
+    email: input.email,
+    status: "demo",
+    createdAt: nowIso(),
+  };
+  const branding: AgencyBranding = {
+    agencyId,
+    logoUrl: input.logoUrl ?? "",
+    primaryColor: input.primaryColor || "#0b1d2e",
+    secondaryColor: "#f5efe5",
+    accentColor: "#c8a96a",
+    visualMood: "premium simple",
+    toneOfVoice: "premium, clair et rassurant",
+    emotionalPositioning: "ultra simple vendeur",
+    backgroundStyle: "fond creme, cartes blanches, boutons bleu nuit",
+  };
+
+  return {
+    ...state,
+    agencies: [agency, ...state.agencies],
+    branding: [branding, ...state.branding],
+  };
+}
+
 export function createPreviewProject(
   state: V2State,
   input: {

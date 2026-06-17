@@ -1,4 +1,4 @@
-import { Link } from "@tanstack/react-router";
+import { Link, useNavigate } from "@tanstack/react-router";
 import {
   ArrowRight,
   CheckCircle2,
@@ -21,13 +21,12 @@ import { isAdminCodeValid, saveAdminSession } from "@/lib/admin-session";
 import { signOutEverywhere } from "@/lib/session-cleanup";
 import { supabase } from "@/lib/supabase";
 import {
-  activateAgencyAfterPayment,
-  addPreviewAiRequest,
   addPropertyDocument,
   addPropertyReport,
   addPropertyVisit,
   calculateIndicativeEstimate,
   createCallbackRequest,
+  createDemoAgency,
   createEstimationRequest,
   createPreviewProject,
   createProperty,
@@ -47,7 +46,6 @@ import {
   getPublicProperties,
   getSellerSpace,
   loadV2State,
-  markPaymentValidated,
   saleSteps,
   saveV2State,
   updateEstimationStatus,
@@ -289,6 +287,9 @@ export function PublicAgencyHomePage({ agencySlug }: { agencySlug: string }) {
             Estimer mon bien
           </Link>
         </Button>
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <a href="#rappel">Etre rappele</a>
+        </Button>
       </Hero>
       <Section title="Biens a vendre">
         <PropertyGrid agencySlug={agencySlug} properties={properties.slice(0, 3)} />
@@ -311,7 +312,7 @@ export function PublicAgencyHomePage({ agencySlug }: { agencySlug: string }) {
               )}
             </div>
           </Panel>
-          <Panel className="p-6">
+          <Panel id="rappel" className="p-6">
             <h3 className="font-display text-3xl">Etre rappele</h3>
             <form className="mt-4 space-y-3" onSubmit={onCallback}>
               <Input name="firstName" placeholder="Prenom" required />
@@ -357,6 +358,8 @@ export function PublicPropertyDetailPage({
   const agency = getAgencyBySlug(state, agencySlug);
   const property = getPropertyBySlug(state, agencySlug, propertySlug);
   const [message, setMessage] = useState("");
+  const [callbackMessage, setCallbackMessage] = useState("");
+  const [showCallback, setShowCallback] = useState(false);
   if (!agency || !property) return <NotFound title="Bien introuvable" />;
 
   function onVisit(event: FormEvent<HTMLFormElement>) {
@@ -380,6 +383,23 @@ export function PublicPropertyDetailPage({
     );
   }
 
+  function onCallback(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    commit(
+      createCallbackRequest(state, agency.id, {
+        propertyId: property.id,
+        firstName: readForm(form, "callbackFirstName"),
+        lastName: readForm(form, "callbackLastName"),
+        phone: readForm(form, "callbackPhone"),
+        email: readForm(form, "callbackEmail"),
+        message: readForm(form, "callbackMessage"),
+      }),
+    );
+    event.currentTarget.reset();
+    setCallbackMessage("Votre demande de rappel a bien ete transmise.");
+  }
+
   return (
     <Shell agency={agency}>
       <main className="mx-auto grid max-w-7xl gap-7 px-5 py-8 md:px-8 lg:grid-cols-[1.2fr_0.8fr]">
@@ -398,6 +418,16 @@ export function PublicPropertyDetailPage({
           <p className="mt-5 leading-relaxed text-primary/65">
             {property.description}
           </p>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="rounded-full bg-white">
+              <Link to="/a/$agencySlug/biens" params={{ agencySlug }}>
+                Retour aux biens
+              </Link>
+            </Button>
+            <Button type="button" className="rounded-full" onClick={() => setShowCallback(true)}>
+              Etre rappele
+            </Button>
+          </div>
         </div>
         <Panel className="p-6">
           <h2 className="font-display text-3xl">Demander une visite</h2>
@@ -419,6 +449,18 @@ export function PublicPropertyDetailPage({
             <Button className="w-full rounded-full">Transmettre</Button>
             {message && <p className="text-sm text-emerald-700">{message}</p>}
           </form>
+          {showCallback && (
+            <form className="mt-6 space-y-3 border-t border-[#e8e0d5] pt-5" onSubmit={onCallback}>
+              <h3 className="font-display text-2xl">Etre rappele</h3>
+              <Input name="callbackFirstName" placeholder="Prenom" required />
+              <Input name="callbackLastName" placeholder="Nom" required />
+              <Input name="callbackPhone" placeholder="Telephone" required />
+              <Input name="callbackEmail" type="email" placeholder="Email" required />
+              <Textarea name="callbackMessage" placeholder="Message optionnel" />
+              <Button className="w-full rounded-full">Envoyer la demande</Button>
+              {callbackMessage && <p className="text-sm text-emerald-700">{callbackMessage}</p>}
+            </form>
+          )}
         </Panel>
       </main>
     </Shell>
@@ -536,6 +578,46 @@ export function SellerHomePage({ sellerToken }: { sellerToken: string }) {
             <Progress current={space.property.saleStep} />
           </Panel>
         </div>
+        <div className="mt-5 grid gap-4 md:grid-cols-4">
+          <Button asChild className="rounded-full">
+            <Link to="/vendeur/$sellerToken/bien" params={{ sellerToken }}>
+              Voir detail du bien
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/vendeur/$sellerToken/visites" params={{ sellerToken }}>
+              Voir visites
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/vendeur/$sellerToken/documents" params={{ sellerToken }}>
+              Voir documents
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/a/$agencySlug" params={{ agencySlug: space.agency.slug }}>
+              Retour site public agence
+            </Link>
+          </Button>
+        </div>
+        <div className="mt-5 grid gap-5 md:grid-cols-2">
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Prochaine visite</h3>
+            <p className="mt-2 text-primary/60">
+              {space.visits[0]
+                ? `${formatDate(space.visits[0].date)} a ${space.visits[0].time}`
+                : "Aucune visite programmee pour le moment."}
+            </p>
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Documents importants</h3>
+            <p className="mt-2 text-primary/60">
+              {space.documents.length
+                ? `${space.documents.length} document(s) visible(s).`
+                : "Aucun document visible pour le moment."}
+            </p>
+          </Panel>
+        </div>
       </Section>
     </PrivateShell>
   );
@@ -546,7 +628,42 @@ export function SellerPropertyPage({ sellerToken }: { sellerToken: string }) {
   const space = getSellerSpace(state, sellerToken);
   if (!space) return <NotFound title="Lien vendeur invalide" />;
   return (
-    <SellerHomePage sellerToken={sellerToken} />
+    <PrivateShell title="Detail du bien vendeur" links={sellerLinks(sellerToken)}>
+      <Header title={space.property.title} text="Description, caracteristiques et photos partagees par l'agence." />
+      <Section>
+        <div className="grid gap-5 lg:grid-cols-[1.1fr_0.9fr]">
+          <Panel className="overflow-hidden">
+            <img
+              src={getMainPhoto(space.property)?.url}
+              alt={space.property.title}
+              className="aspect-[16/10] w-full object-cover"
+            />
+          </Panel>
+          <Panel className="p-6">
+            <Badge>{space.property.type}</Badge>
+            <h2 className="mt-3 font-display text-4xl">{formatPrice(space.property.price)}</h2>
+            <p className="mt-3 text-primary/60">{space.property.description}</p>
+            <div className="mt-5 grid gap-3 text-sm text-primary/65">
+              <p>{space.property.city} / {space.property.district}</p>
+              <p>{space.property.surface} m2 / {space.property.rooms} pieces</p>
+              <p>{space.property.address}</p>
+            </div>
+            <div className="mt-6 flex flex-wrap gap-2">
+              <Button asChild variant="outline" className="rounded-full bg-white">
+                <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+                  Retour espace vendeur
+                </Link>
+              </Button>
+              <Button asChild className="rounded-full">
+                <Link to="/vendeur/$sellerToken/visites" params={{ sellerToken }}>
+                  Voir visites
+                </Link>
+              </Button>
+            </div>
+          </Panel>
+        </div>
+      </Section>
+    </PrivateShell>
   );
 }
 
@@ -569,6 +686,23 @@ export function SellerVisitsPage({ sellerToken }: { sellerToken: string }) {
               </p>
             </Panel>
           ))}
+          {!space.visits.length && (
+            <Panel className="p-8 text-center text-primary/55">
+              Aucune visite visible pour le moment.
+            </Panel>
+          )}
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" className="rounded-full bg-white">
+              <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+                Retour espace vendeur
+              </Link>
+            </Button>
+            <Button asChild className="rounded-full">
+              <Link to="/vendeur/$sellerToken/documents" params={{ sellerToken }}>
+                Voir documents
+              </Link>
+            </Button>
+          </div>
         </div>
       </Section>
     </PrivateShell>
@@ -597,6 +731,16 @@ export function SellerDocumentsPage({ sellerToken }: { sellerToken: string }) {
               </Button>
             </Panel>
           ))}
+          {!space.documents.length && (
+            <Panel className="p-8 text-center text-primary/55">
+              Aucun document visible pour le moment.
+            </Panel>
+          )}
+          <Button asChild variant="outline" className="w-fit rounded-full bg-white">
+            <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+              Retour espace vendeur
+            </Link>
+          </Button>
         </div>
       </Section>
     </PrivateShell>
@@ -625,11 +769,30 @@ export function AgencyDashboardPage({ agencySlug }: { agencySlug: string }) {
         <Stats
           items={[
             ["Tous les biens", properties.length],
+            ["Mes biens", properties.length],
             ["Demandes estimation", state.estimationRequests.length],
             ["Visites a venir", state.visits.length],
             ["CR a publier", state.reports.filter((r) => !r.visibleToSeller).length],
           ]}
         />
+        <div className="mt-5 grid gap-4 md:grid-cols-3">
+          {[
+            ["Tous les biens", `/agence/${agencySlug}/biens`],
+            ["Creer annonce", `/agence/${agencySlug}/biens/nouveau`],
+            ["Estimations", `/agence/${agencySlug}/estimations`],
+            ["Demandes de visite", `/agence/${agencySlug}/demandes-visites`],
+            ["Vendeurs", `/agence/${agencySlug}/vendeurs`],
+            ["Agents", `/agence/${agencySlug}/agents`],
+            ["Site public", `/a/${agencySlug}`],
+          ].map(([label, href]) => (
+            <Button key={href} asChild variant="outline" className="justify-between rounded-full bg-white">
+              <Link to={href}>
+                {label}
+                <ArrowRight className="h-4 w-4" />
+              </Link>
+            </Button>
+          ))}
+        </div>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           {properties.map((property) => (
             <AgencyPropertyCard key={property.id} agencySlug={agencySlug} property={property} />
@@ -646,7 +809,13 @@ export function AgencyPropertiesPage({ agencySlug }: { agencySlug: string }) {
   if (!agency) return <NotFound title="Agence introuvable" />;
   return (
     <AgencyShell agency={agency}>
-      <Header title="Biens de l'agence" text="Publiez ou gerez les annonces visibles cote public." />
+      <Header title="Biens de l'agence" text="Publiez ou gerez les annonces visibles cote public.">
+        <Button asChild className="rounded-full">
+          <Link to="/agence/$slug/biens/nouveau" params={{ slug: agencySlug }}>
+            Creer annonce
+          </Link>
+        </Button>
+      </Header>
       <Section>
         <div className="grid gap-4 md:grid-cols-2">
           {getAgencyProperties(state, agency.id).map((property) => (
@@ -660,6 +829,7 @@ export function AgencyPropertiesPage({ agencySlug }: { agencySlug: string }) {
 
 export function AgencyNewPropertyPage({ agencySlug }: { agencySlug: string }) {
   const { state, commit } = useV2Store();
+  const navigate = useNavigate();
   const agency = getAgencyBySlug(state, agencySlug);
   const [feedback, setFeedback] = useState("");
   if (!agency) return <NotFound title="Agence introuvable" />;
@@ -668,8 +838,7 @@ export function AgencyNewPropertyPage({ agencySlug }: { agencySlug: string }) {
     event.preventDefault();
     const submitter = (event.nativeEvent as SubmitEvent).submitter as HTMLButtonElement | null;
     const form = new FormData(event.currentTarget);
-    commit(
-      createProperty(state, agency, {
+    const next = createProperty(state, agency, {
         title: readForm(form, "title"),
         city: readForm(form, "city"),
         price: readNumber(form, "price"),
@@ -682,15 +851,24 @@ export function AgencyNewPropertyPage({ agencySlug }: { agencySlug: string }) {
         description: readForm(form, "description"),
         publicBadge: readForm(form, "publicBadge") as PublicBadge,
         isPublished: submitter?.value === "publish",
-      }),
-    );
-    event.currentTarget.reset();
+      });
+    const propertyId = next.properties[0]?.id;
+    commit(next);
     setFeedback(submitter?.value === "publish" ? "Annonce publiee." : "Brouillon enregistre.");
+    if (propertyId) {
+      navigate({ to: "/agence/$slug/biens/$propertyId", params: { slug: agencySlug, propertyId } });
+    }
   }
 
   return (
     <AgencyShell agency={agency}>
-      <Header title="Creer une annonce" text="Un formulaire simple avec vrai selecteur de photos." />
+      <Header title="Creer une annonce" text="Un formulaire simple avec vrai selecteur de photos.">
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/agence/$slug/biens" params={{ slug: agencySlug }}>
+            Retour biens
+          </Link>
+        </Button>
+      </Header>
       <Section>
         <Panel className="p-6">
           <form className="grid gap-4 md:grid-cols-2" onSubmit={onSubmit}>
@@ -743,6 +921,7 @@ export function AgencyPropertyManagePage({
   const property = getPropertyById(state, propertyId);
   const [feedback, setFeedback] = useState("");
   if (!agency || !property) return <NotFound title="Bien introuvable" />;
+  const seller = state.sellers.find((item) => item.propertyId === property.id) ?? null;
 
   function saveProperty(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -832,7 +1011,23 @@ export function AgencyPropertyManagePage({
 
   return (
     <AgencyShell agency={agency}>
-      <Header title={property.title} text="Gestion complete d'un seul bien." />
+      <Header title={property.title} text="Gestion complete d'un seul bien.">
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/agence/$slug/biens" params={{ slug: agencySlug }}>
+              Retour biens
+            </Link>
+          </Button>
+          <Button asChild className="rounded-full">
+            <Link
+              to="/a/$agencySlug/biens/$propertySlug"
+              params={{ agencySlug, propertySlug: property.slug }}
+            >
+              Voir annonce publique
+            </Link>
+          </Button>
+        </div>
+      </Header>
       <Section>
         {feedback && <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">{feedback}</div>}
         <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
@@ -859,6 +1054,42 @@ export function AgencyPropertyManagePage({
                   </Button>
                 ))}
               </div>
+            </Panel>
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Modifier photos</h3>
+              <p className="mt-2 text-sm text-primary/55">
+                Placeholder Partie 1 : le selecteur est pret, l'upload complet reste hors scope ici.
+              </p>
+              <label className="mt-4 flex cursor-pointer items-center justify-center gap-2 rounded-full border bg-white px-4 py-3 text-sm font-medium">
+                <ImagePlus className="h-4 w-4" />
+                Ajouter photos
+                <input
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  className="hidden"
+                  onChange={() => setFeedback("Photos selectionnees pour la demo.")}
+                />
+              </label>
+            </Panel>
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Vendeur associe</h3>
+              {seller ? (
+                <>
+                  <p className="mt-2 text-sm text-primary/60">
+                    {seller.firstName} {seller.lastName} / {seller.email}
+                  </p>
+                  <Button asChild className="mt-4 rounded-full">
+                    <Link to="/vendeur/$sellerToken" params={{ sellerToken: seller.sellerToken }}>
+                      Ouvrir espace vendeur
+                    </Link>
+                  </Button>
+                </>
+              ) : (
+                <p className="mt-2 text-sm text-primary/55">
+                  Aucun vendeur associe. Utilisez le formulaire Associer vendeur.
+                </p>
+              )}
             </Panel>
           </div>
           <div className="space-y-5">
@@ -920,30 +1151,96 @@ export function AgencyPropertyManagePage({
 }
 
 export function AgencySellersPage({ agencySlug }: { agencySlug: string }) {
-  const { state } = useV2Store();
+  const { state, commit } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
+  const [feedback, setFeedback] = useState("");
   if (!agency) return <NotFound title="Agence introuvable" />;
+  const properties = getAgencyProperties(state, agency.id);
+
+  function addSeller(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const property = getPropertyById(state, readForm(form, "propertyId")) ?? properties[0];
+    if (!property) {
+      setFeedback("Creez d'abord un bien avant d'associer un vendeur.");
+      return;
+    }
+    const next = createSellerAccess(state, agency, property, {
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    });
+    commit(next);
+    event.currentTarget.reset();
+    setFeedback("Vendeur demo cree.");
+  }
+
   return (
     <AgencyShell agency={agency}>
-      <Header title="Vendeurs" text="Acces vendeurs associes aux biens." />
+      <Header title="Vendeurs" text="Acces vendeurs associes aux biens.">
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/agence/$slug/biens" params={{ slug: agencySlug }}>
+            Voir biens
+          </Link>
+        </Button>
+      </Header>
       <Section>
-        <ListPanels
-          items={state.sellers.filter((seller) => seller.agencyId === agency.id)}
-          render={(seller) => (
-            <>
-              <Badge variant="secondary">{seller.status}</Badge>
-              <h3 className="mt-2 font-display text-3xl">
-                {seller.firstName} {seller.lastName}
-              </h3>
-              <p className="text-sm text-primary/55">{seller.email}</p>
-              <Button asChild className="mt-4 rounded-full">
-                <Link to="/vendeur/$sellerToken" params={{ sellerToken: seller.sellerToken }}>
-                  Voir espace vendeur
-                </Link>
-              </Button>
-            </>
-          )}
-        />
+        <div className="grid gap-5 md:grid-cols-[0.8fr_1.2fr]">
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Creer vendeur demo</h3>
+            <form className="mt-4 grid gap-3" onSubmit={addSeller}>
+              <Input name="firstName" placeholder="Prenom" required />
+              <Input name="lastName" placeholder="Nom" required />
+              <Input name="email" type="email" placeholder="Email" required />
+              <Input name="phone" placeholder="Telephone" required />
+              <select name="propertyId" className="rounded-md border bg-white px-3 py-2" required>
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.title}
+                  </option>
+                ))}
+              </select>
+              <Button className="rounded-full">Creer vendeur demo</Button>
+              {feedback && <p className="text-sm text-emerald-700">{feedback}</p>}
+            </form>
+          </Panel>
+          <ListPanels
+            items={state.sellers.filter((seller) => seller.agencyId === agency.id)}
+            render={(seller) => {
+              const property = getPropertyById(state, seller.propertyId);
+              return (
+                <>
+                  <Badge variant="secondary">{seller.status}</Badge>
+                  <h3 className="mt-2 font-display text-3xl">
+                    {seller.firstName} {seller.lastName}
+                  </h3>
+                  <p className="text-sm text-primary/55">{seller.email} / {seller.phone}</p>
+                  <p className="mt-2 text-sm text-primary/55">
+                    Bien associe : {property?.title ?? "Bien introuvable"}
+                  </p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <Button asChild className="rounded-full">
+                      <Link to="/vendeur/$sellerToken" params={{ sellerToken: seller.sellerToken }}>
+                        Voir espace vendeur
+                      </Link>
+                    </Button>
+                    {property && (
+                      <Button asChild variant="outline" className="rounded-full bg-white">
+                        <Link
+                          to="/agence/$slug/biens/$propertyId"
+                          params={{ slug: agencySlug, propertyId: property.id }}
+                        >
+                          Voir bien associe
+                        </Link>
+                      </Button>
+                    )}
+                  </div>
+                </>
+              );
+            }}
+          />
+        </div>
       </Section>
     </AgencyShell>
   );
@@ -1048,6 +1345,38 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
                   {member.firstName} {member.lastName}
                 </h3>
                 <p className="text-sm text-primary/55">{member.email}</p>
+                <p className="mt-1 text-sm text-primary/55">Statut : {member.status}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={() => setFeedback("Modification agent disponible en placeholder Partie 1.")}
+                  >
+                    Modifier agent
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={() => setFeedback("Desactivation agent simulee pour la demo.")}
+                  >
+                    Desactiver agent
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="rounded-full bg-white"
+                    onClick={() => setFeedback("Reactivation agent simulee pour la demo.")}
+                  >
+                    Reactiver agent
+                  </Button>
+                  <Button asChild className="rounded-full">
+                    <Link to="/agence/$slug" params={{ slug: agencySlug }}>
+                      Ouvrir espace agence
+                    </Link>
+                  </Button>
+                </div>
               </>
             )}
           />
@@ -1061,10 +1390,14 @@ export function AdminDashboardV2Page() {
   const { state } = useV2Store();
   const active = state.agencies.filter((agency) => agency.status === "active");
   const demo = state.agencies.filter((agency) => agency.status === "demo");
+  const toActivate = state.agencies.filter((agency) => agency.status === "payment_pending");
+  const alerts =
+    state.subscriptions.filter((subscription) => subscription.status === "failed").length +
+    toActivate.length;
   const monthly = state.subscriptions.reduce((sum, sub) => sum + sub.monthlyAmount, 0);
   return (
     <AdminShell>
-      <Header title="Dashboard global Signature" text="Demos, agences, abonnements, alertes et paiements." >
+      <Header title="Dashboard Signature" text="Demos, agences, abonnements, alertes et paiements." >
         <Button asChild className="rounded-full">
           <Link to="/admin/preview-studio/nouveau">Creer une demo agence</Link>
         </Button>
@@ -1074,7 +1407,9 @@ export function AdminDashboardV2Page() {
           items={[
             ["Agences demo", demo.length],
             ["Agences actives", active.length],
+            ["Agences a activer", toActivate.length],
             ["Abonnements", state.subscriptions.length],
+            ["Alertes importantes", alerts],
             ["CA mensuel theorique", formatPrice(monthly)],
           ]}
         />
@@ -1088,7 +1423,7 @@ export function AdminDashboardV2Page() {
             <Panel key={href} className="p-5">
               <h3 className="font-display text-3xl">{label}</h3>
               <Button asChild variant="outline" className="mt-4 rounded-full bg-white">
-                <a href={href}>Ouvrir</a>
+                <Link to={href}>Ouvrir</Link>
               </Button>
             </Panel>
           ))}
@@ -1102,10 +1437,15 @@ export function PreviewStudioListPage() {
   const { state } = useV2Store();
   return (
     <AdminShell>
-      <Header title="Signature Preview Studio" text="Creer et piloter les demos premium." >
-        <Button asChild className="rounded-full">
-          <Link to="/admin/preview-studio/nouveau">Nouvelle demo</Link>
-        </Button>
+      <Header title="Signature Preview Studio" text="Creez une demo premium d'agence en quelques minutes." >
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/admin">Retour Dashboard</Link>
+          </Button>
+          <Button asChild className="rounded-full">
+            <Link to="/admin/preview-studio/nouveau">Nouvelle demo</Link>
+          </Button>
+        </div>
       </Header>
       <Section>
         <ListPanels
@@ -1130,7 +1470,7 @@ export function PreviewStudioListPage() {
 
 export function PreviewStudioNewPage() {
   const { state, commit } = useV2Store();
-  const [createdId, setCreatedId] = useState("");
+  const navigate = useNavigate();
 
   function create(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1142,10 +1482,13 @@ export function PreviewStudioNewPage() {
       phone: readForm(form, "phone"),
       email: readForm(form, "email"),
       contactName: readForm(form, "contactName"),
-      priority: readForm(form, "priority") as "test",
+      priority: readForm(form, "priority") as "test" | "hot" | "meeting" | "signature",
     });
+    const createdId = next.previewProjects[0]?.id;
     commit(next);
-    setCreatedId(next.previewProjects[0]?.id ?? "");
+    if (createdId) {
+      navigate({ to: "/admin/preview-studio/$previewId", params: { previewId: createdId } });
+    }
   }
 
   return (
@@ -1168,13 +1511,6 @@ export function PreviewStudioNewPage() {
             </select>
             <Button className="rounded-full md:col-span-2">Analyser automatiquement</Button>
           </form>
-          {createdId && (
-            <Button asChild className="mt-5 rounded-full">
-              <Link to="/admin/preview-studio/$previewId" params={{ previewId: createdId }}>
-                Ouvrir la demo creee
-              </Link>
-            </Button>
-          )}
         </Panel>
       </Section>
     </AdminShell>
@@ -1184,33 +1520,58 @@ export function PreviewStudioNewPage() {
 export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
   const { state, commit } = useV2Store();
   const project = state.previewProjects.find((item) => item.id === previewId);
-  const [instruction, setInstruction] = useState("");
+  const [rdvReady, setRdvReady] = useState(false);
+  const [activationMessage, setActivationMessage] = useState("");
   if (!project) return <NotFound title="Projet introuvable" />;
   const agency = getAgencyById(state, project.agencyId);
-
-  function addAi(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!instruction.trim()) return;
-    commit(addPreviewAiRequest(state, project.id, instruction));
-    setInstruction("");
-  }
+  const branding = agency ? getBrandingForAgency(state, agency.id) : null;
 
   return (
     <AdminShell>
       <Header title={project.agencyName} text={project.analysisSummary}>
-        <Button className="rounded-full" onClick={() => commit(generatePreviewDemo(state, project.id))}>
-          Generer la demo premium
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/admin/preview-studio">Retour Preview Studio</Link>
+          </Button>
+          {agency && (
+            <>
+              <Button asChild variant="outline" className="rounded-full bg-white">
+                <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
+                  Voir site public demo
+                </Link>
+              </Button>
+              <Button asChild className="rounded-full">
+                <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+                  Voir espace agence
+                </Link>
+              </Button>
+            </>
+          )}
+        </div>
       </Header>
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           <Panel className="p-5">
-            <h3 className="font-display text-3xl">Analyse</h3>
+            <h3 className="font-display text-3xl">Resume agence</h3>
+            <p className="mt-3 text-sm text-primary/60">{project.city}</p>
+            <p className="text-sm text-primary/60">{project.websiteUrl}</p>
+            <p className="text-sm text-primary/60">{project.phone || "Telephone a completer"}</p>
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Analyse du site</h3>
             {[...project.detectedWeaknesses, ...project.signatureOpportunities].map((item) => (
               <p key={item} className="mt-3 rounded-2xl bg-[#faf7f0] p-3 text-sm">
                 {item}
               </p>
             ))}
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Identite visuelle</h3>
+            <div className="mt-4 grid gap-3 text-sm text-primary/60">
+              <p>Couleur principale : {branding?.primaryColor ?? "#0b1d2e"}</p>
+              <p>Ambiance : {branding?.visualMood ?? "premium simple"}</p>
+              <p>Ton : {branding?.toneOfVoice ?? "clair et rassurant"}</p>
+            </div>
           </Panel>
           <Panel className="p-5">
             <h3 className="font-display text-3xl">Biens detectes</h3>
@@ -1219,34 +1580,43 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
                 {property.title} / confiance {Math.round(property.confidenceScore * 100)}%
               </p>
             ))}
-          </Panel>
-          <Panel className="p-5">
-            <h3 className="font-display text-3xl">Modifier avec IA</h3>
-            <form className="mt-4 space-y-3" onSubmit={addAi}>
-              <Textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Ex : rends le site plus premium" />
-              <Button className="rounded-full">Generer proposition</Button>
-            </form>
-          </Panel>
-          <Panel className="p-5">
-            <h3 className="font-display text-3xl">Activation apres paiement</h3>
-            <p className="mt-2 text-sm text-primary/55">
-              Aucune agence ne passe active sans paiement valide.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {state.plans.map((plan) => (
-                <Button key={plan.id} variant="outline" className="rounded-full bg-white" onClick={() => commit(activateAgencyAfterPayment(state, project.agencyId, plan.id))}>
-                  Choisir {plan.name}
-                </Button>
-              ))}
-              <Button className="rounded-full" onClick={() => commit(markPaymentValidated(state, project.agencyId))}>
-                Paiement valide
-              </Button>
-            </div>
-            {agency?.stripePaymentUrl && (
-              <a href={agency.stripePaymentUrl} className="mt-4 block break-all text-sm">
-                {agency.stripePaymentUrl}
-              </a>
+            {!project.scrapedProperties.length && (
+              <p className="mt-3 text-sm text-primary/55">Aucun bien detecte pour le moment.</p>
             )}
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Demo generee</h3>
+            <p className="mt-2 text-sm text-primary/55">Statut : {project.status}</p>
+            <Button className="mt-4 rounded-full" onClick={() => commit(generatePreviewDemo(state, project.id))}>
+              Generer la demo placeholder
+            </Button>
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Preparation RDV</h3>
+            <p className="mt-2 text-sm text-primary/55">
+              Fiche commerciale placeholder avec pitch, objections et message de suivi.
+            </p>
+            <Button className="mt-4 rounded-full" onClick={() => setRdvReady(true)}>
+              Preparer RDV
+            </Button>
+            {rdvReady && (
+              <p className="mt-4 rounded-2xl bg-[#faf7f0] p-3 text-sm">
+                Preparation RDV prete en placeholder Partie 1.
+              </p>
+            )}
+          </Panel>
+          <Panel className="p-5">
+            <h3 className="font-display text-3xl">Activation agence</h3>
+            <p className="mt-2 text-sm text-primary/55">
+              Activation disponible apres paiement dans la Partie 2.
+            </p>
+            <Button
+              className="mt-4 rounded-full"
+              onClick={() => setActivationMessage("Activation disponible apres paiement dans la Partie 2.")}
+            >
+              Activer agence
+            </Button>
+            {activationMessage && <p className="mt-4 text-sm text-primary/60">{activationMessage}</p>}
           </Panel>
         </div>
       </Section>
@@ -1255,23 +1625,91 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
 }
 
 export function AdminAgenciesPage() {
-  const { state } = useV2Store();
+  const { state, commit } = useV2Store();
+  const navigate = useNavigate();
+  const [filter, setFilter] = useState<"all" | "demo" | "active" | "lost">("all");
+  const agencies = state.agencies.filter((agency) => filter === "all" || agency.status === filter);
+
+  function createAgency(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = createDemoAgency(state, {
+      name: readForm(form, "name"),
+      city: readForm(form, "city"),
+      phone: readForm(form, "phone"),
+      email: readForm(form, "email"),
+      primaryColor: readForm(form, "primaryColor"),
+      logoUrl: readForm(form, "logoUrl"),
+    });
+    const agencyId = next.agencies[0]?.id;
+    commit(next);
+    if (agencyId) {
+      navigate({ to: "/admin/agences/$agencyId", params: { agencyId } });
+    }
+  }
+
   return (
     <AdminShell>
-      <Header title="Agences" text="Toutes les agences demo, actives ou perdues." />
+      <Header title="Agences" text="Toutes les agences demo, actives ou perdues.">
+        <Button asChild className="rounded-full">
+          <a href="#creer-agence-demo">Creer une agence demo</a>
+        </Button>
+      </Header>
       <Section>
+        <div className="mb-5 flex flex-wrap gap-2">
+          {[
+            ["all", "Toutes"],
+            ["demo", "Demo"],
+            ["active", "Actives"],
+            ["lost", "Perdues"],
+          ].map(([value, label]) => (
+            <Button
+              key={value}
+              type="button"
+              variant={filter === value ? "default" : "outline"}
+              className="rounded-full bg-white"
+              onClick={() => setFilter(value as typeof filter)}
+            >
+              {label}
+            </Button>
+          ))}
+        </div>
+        <Panel id="creer-agence-demo" className="mb-5 p-5">
+          <h3 className="font-display text-3xl">Creer une agence demo</h3>
+          <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={createAgency}>
+            <Input name="name" placeholder="Nom agence" required />
+            <Input name="city" placeholder="Ville" required />
+            <Input name="phone" placeholder="Telephone" />
+            <Input name="email" type="email" placeholder="Email" />
+            <Input name="primaryColor" placeholder="Couleur principale optionnelle" />
+            <Input name="logoUrl" placeholder="URL logo optionnelle" />
+            <Button className="rounded-full md:col-span-2">Creer l'agence demo</Button>
+          </form>
+        </Panel>
         <ListPanels
-          items={state.agencies}
+          items={agencies}
           render={(agency) => (
             <>
               <Badge>{agency.status}</Badge>
               <h3 className="mt-2 font-display text-3xl">{agency.name}</h3>
               <p className="text-sm text-primary/55">{agency.city}</p>
-              <Button asChild className="mt-4 rounded-full">
-                <Link to="/admin/agences/$agencyId" params={{ agencyId: agency.id }}>
-                  Ouvrir fiche
-                </Link>
-              </Button>
+              <div className="mt-4 flex flex-wrap gap-2">
+                <Button asChild className="rounded-full">
+                  <Link to="/admin/agences/$agencyId" params={{ agencyId: agency.id }}>
+                    Ouvrir agence
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full bg-white">
+                  <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
+                    Ouvrir site public
+                  </Link>
+                </Button>
+                <Button asChild variant="outline" className="rounded-full bg-white">
+                  <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+                    Ouvrir espace agence
+                  </Link>
+                </Button>
+              </div>
             </>
           )}
         />
@@ -1282,25 +1720,188 @@ export function AdminAgenciesPage() {
 
 export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
   const { state, commit } = useV2Store();
+  const navigate = useNavigate();
   const agency = getAgencyById(state, agencyId);
+  const [teamFeedback, setTeamFeedback] = useState("");
+  const [sellerToken, setSellerToken] = useState("");
   if (!agency) return <NotFound title="Agence introuvable" />;
+  const properties = getAgencyProperties(state, agency.id);
+  const team = state.teamMembers.filter((member) => member.agencyId === agency.id);
+  const sellers = state.sellers.filter((seller) => seller.agencyId === agency.id);
+
+  function createTeamMember(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = createTeamInvite(state, agency.id, {
+      role: readForm(form, "role") as "manager" | "agent",
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    });
+    const member = next.teamMembers[0];
+    commit(next);
+    event.currentTarget.reset();
+    setTeamFeedback(member ? `Invitation placeholder : /creer-acces/${member.id}` : "Invitation creee.");
+  }
+
+  function createDemoProperty(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const next = createProperty(state, agency, {
+      title: readForm(form, "title"),
+      city: readForm(form, "city") || agency.city,
+      price: readNumber(form, "price"),
+      surface: readNumber(form, "surface"),
+      rooms: readNumber(form, "rooms"),
+      type: readForm(form, "type") || "Appartement",
+      district: readForm(form, "district"),
+      address: readForm(form, "district"),
+      description: readForm(form, "description"),
+      publicBadge: "Nouveaute",
+      isPublished: true,
+    });
+    const propertyId = next.properties[0]?.id;
+    commit(next);
+    if (propertyId) {
+      navigate({ to: "/agence/$slug/biens/$propertyId", params: { slug: agency.slug, propertyId } });
+    }
+  }
+
+  function createDemoSeller(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const property = getPropertyById(state, readForm(form, "propertyId")) ?? properties[0];
+    if (!property) {
+      setSellerToken("");
+      setTeamFeedback("Creez d'abord un bien demo avant le vendeur.");
+      return;
+    }
+    const next = createSellerAccess(state, agency, property, {
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    });
+    const seller = next.sellers[0];
+    commit(next);
+    event.currentTarget.reset();
+    setSellerToken(seller?.sellerToken ?? "");
+  }
+
   return (
     <AdminShell>
-      <Header title={agency.name} text={`Statut : ${agency.status}`} />
+      <Header title={agency.name} text={`Statut : ${agency.status}`}>
+        <div className="flex flex-wrap gap-2">
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
+              Ouvrir site public
+            </Link>
+          </Button>
+          <Button asChild className="rounded-full">
+            <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+              Ouvrir espace agence
+            </Link>
+          </Button>
+        </div>
+      </Header>
       <Section>
-        <Panel className="p-5">
-          <h3 className="font-display text-3xl">Paiement et activation</h3>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {state.plans.map((plan) => (
-              <Button key={plan.id} variant="outline" className="rounded-full bg-white" onClick={() => commit(activateAgencyAfterPayment(state, agency.id, plan.id))}>
-                Lien {plan.name}
-              </Button>
-            ))}
-            <Button className="rounded-full" onClick={() => commit(markPaymentValidated(state, agency.id))}>
-              Valider paiement
-            </Button>
+        <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
+          <div className="space-y-5">
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Fiche agence</h3>
+              <div className="mt-4 grid gap-2 text-sm text-primary/60">
+                <p>Slug : {agency.slug}</p>
+                <p>Ville : {agency.city}</p>
+                <p>Telephone : {agency.phone || "A completer"}</p>
+                <p>Email : {agency.email || "A completer"}</p>
+              </div>
+            </Panel>
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Equipe</h3>
+              {team.map((member) => (
+                <p key={member.id} className="mt-2 rounded-2xl bg-[#faf7f0] p-3 text-sm">
+                  {member.firstName} {member.lastName} / {member.role} / {member.status}
+                </p>
+              ))}
+              {!team.length && <p className="mt-2 text-sm text-primary/55">Aucun membre pour le moment.</p>}
+            </Panel>
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Biens</h3>
+              {properties.map((property) => (
+                <div key={property.id} className="mt-3 rounded-2xl bg-[#faf7f0] p-3 text-sm">
+                  <p>{property.title}</p>
+                  <Button asChild variant="outline" className="mt-3 rounded-full bg-white">
+                    <Link
+                      to="/agence/$slug/biens/$propertyId"
+                      params={{ slug: agency.slug, propertyId: property.id }}
+                    >
+                      Ouvrir gestion bien
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+              {!properties.length && <p className="mt-2 text-sm text-primary/55">Aucun bien pour le moment.</p>}
+            </Panel>
+            <Panel className="p-5">
+              <h3 className="font-display text-3xl">Vendeurs</h3>
+              {sellers.map((seller) => (
+                <div key={seller.id} className="mt-3 rounded-2xl bg-[#faf7f0] p-3 text-sm">
+                  <p>{seller.firstName} {seller.lastName} / {seller.email}</p>
+                  <Button asChild variant="outline" className="mt-3 rounded-full bg-white">
+                    <Link to="/vendeur/$sellerToken" params={{ sellerToken: seller.sellerToken }}>
+                      Voir espace vendeur
+                    </Link>
+                  </Button>
+                </div>
+              ))}
+              {!sellers.length && <p className="mt-2 text-sm text-primary/55">Aucun vendeur pour le moment.</p>}
+            </Panel>
           </div>
-        </Panel>
+          <div className="space-y-5">
+            <PanelForm title="Creer patron ou agent" onSubmit={createTeamMember}>
+              <select name="role" className="rounded-md border bg-white px-3 py-2">
+                <option value="manager">Patron / manager</option>
+                <option value="agent">Agent</option>
+              </select>
+              <Input name="firstName" placeholder="Prenom" required />
+              <Input name="lastName" placeholder="Nom" required />
+              <Input name="email" type="email" placeholder="Email" required />
+              <Input name="phone" placeholder="Telephone" />
+              {teamFeedback && <p className="text-sm text-emerald-700 md:col-span-2">{teamFeedback}</p>}
+            </PanelForm>
+            <PanelForm title="Creer bien demo" onSubmit={createDemoProperty}>
+              <Input name="title" placeholder="Titre" required />
+              <Input name="city" placeholder="Ville" defaultValue={agency.city} required />
+              <Input name="price" type="number" placeholder="Prix" defaultValue={420000} required />
+              <Input name="surface" type="number" placeholder="Surface" defaultValue={86} required />
+              <Input name="rooms" type="number" placeholder="Pieces" defaultValue={4} required />
+              <Input name="type" placeholder="Type" defaultValue="Appartement" />
+              <Input name="district" placeholder="Adresse ou quartier" />
+              <Textarea name="description" placeholder="Description courte" className="md:col-span-2" required />
+            </PanelForm>
+            <PanelForm title="Creer vendeur demo" onSubmit={createDemoSeller}>
+              <Input name="firstName" placeholder="Prenom" required />
+              <Input name="lastName" placeholder="Nom" required />
+              <Input name="email" type="email" placeholder="Email" required />
+              <Input name="phone" placeholder="Telephone" required />
+              <select name="propertyId" className="rounded-md border bg-white px-3 py-2 md:col-span-2">
+                {properties.map((property) => (
+                  <option key={property.id} value={property.id}>
+                    {property.title}
+                  </option>
+                ))}
+              </select>
+              {sellerToken && (
+                <Button asChild variant="outline" className="rounded-full bg-white md:col-span-2">
+                  <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+                    Voir espace vendeur
+                  </Link>
+                </Button>
+              )}
+            </PanelForm>
+          </div>
+        </div>
       </Section>
     </AdminShell>
   );
@@ -1308,10 +1909,16 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
 
 export function AdminPricingPage() {
   const { state } = useV2Store();
+  const [feedback, setFeedback] = useState("");
   return (
     <AdminShell>
-      <Header title="Tarifs" text="Frais d'installation, mensualites et formules." />
+      <Header title="Tarifs" text="Frais d'installation, mensualites et formules.">
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/admin">Retour Admin</Link>
+        </Button>
+      </Header>
       <Section>
+        {feedback && <div className="mb-4 rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/60">{feedback}</div>}
         <div className="grid gap-4 md:grid-cols-3">
           {state.plans.map((plan) => (
             <Panel key={plan.id} className="p-5">
@@ -1322,6 +1929,23 @@ export function AdminPricingPage() {
               <p className="text-sm text-primary/50">Installation</p>
               <p className="mt-3 text-2xl font-medium">{formatPrice(plan.monthlyFee)}</p>
               <p className="text-sm text-primary/50">Mensuel</p>
+              <div className="mt-5 flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="rounded-full bg-white"
+                  onClick={() => setFeedback("Modification des tarifs disponible dans la Partie 2.")}
+                >
+                  Modifier
+                </Button>
+                <Button
+                  type="button"
+                  className="rounded-full"
+                  onClick={() => setFeedback("Activation/desactivation des formules disponible dans la Partie 2.")}
+                >
+                  Activer / desactiver
+                </Button>
+              </div>
             </Panel>
           ))}
         </div>
@@ -1332,23 +1956,38 @@ export function AdminPricingPage() {
 
 export function AdminSubscriptionsPage() {
   const { state } = useV2Store();
+  const active = state.subscriptions.filter((subscription) => subscription.status === "active" || subscription.status === "trial");
+  const pending = state.subscriptions.filter((subscription) => subscription.status === "payment_pending");
+  const failed = state.subscriptions.filter((subscription) => subscription.status === "failed");
   return (
     <AdminShell>
-      <Header title="Abonnements" text="Stripe et statuts paiement." />
+      <Header title="Abonnements" text="Ossature des abonnements, paiements en attente et paiements echoues.">
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/admin">Retour Admin</Link>
+        </Button>
+      </Header>
       <Section>
-        <ListPanels
-          items={state.subscriptions}
-          render={(subscription) => (
-            <>
-              <Badge>{subscription.status}</Badge>
-              <h3 className="mt-2 font-display text-3xl">{subscription.planId}</h3>
-              <p className="text-sm text-primary/55">{formatPrice(subscription.monthlyAmount)}</p>
-              <a href={subscription.stripePaymentUrl} className="mt-3 block break-all text-sm">
-                {subscription.stripePaymentUrl}
-              </a>
-            </>
-          )}
-        />
+        <div className="grid gap-5 md:grid-cols-3">
+          {[
+            ["Abonnements actifs", active],
+            ["Paiements en attente", pending],
+            ["Paiements echoues", failed],
+          ].map(([title, items]) => (
+            <Panel key={title as string} className="p-5">
+              <h3 className="font-display text-3xl">{title as string}</h3>
+              {(items as typeof state.subscriptions).map((subscription) => (
+                <div key={subscription.id} className="mt-3 rounded-2xl bg-[#faf7f0] p-3 text-sm">
+                  <Badge>{subscription.status}</Badge>
+                  <p className="mt-2">{subscription.planId}</p>
+                  <p className="text-primary/55">{formatPrice(subscription.monthlyAmount)}</p>
+                </div>
+              ))}
+              {!(items as typeof state.subscriptions).length && (
+                <p className="mt-3 text-sm text-primary/55">Aucun abonnement pour le moment.</p>
+              )}
+            </Panel>
+          ))}
+        </div>
       </Section>
     </AdminShell>
   );
@@ -1439,9 +2078,9 @@ function PrivateShell({
           <div className="font-display text-xl">{title}</div>
           <div className="flex items-center gap-2 overflow-auto">
             {links.map(([label, href]) => (
-              <a key={href} href={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
+              <Link key={href} to={href} className="whitespace-nowrap rounded-full bg-white px-3 py-2 text-sm">
                 {label}
-              </a>
+              </Link>
             ))}
             <SessionLogoutButton />
           </div>
@@ -1509,6 +2148,10 @@ function Section({ title, children }: { title?: string; children: ReactNode }) {
 }
 
 function PropertyGrid({ agencySlug, properties }: { agencySlug: string; properties: Property[] }) {
+  if (!properties.length) {
+    return <Panel className="p-8 text-center text-primary/55">Aucun bien publie pour le moment.</Panel>;
+  }
+
   return (
     <div className="grid gap-5 md:grid-cols-3">
       {properties.map((property) => (
@@ -1538,11 +2181,18 @@ function AgencyPropertyCard({ agencySlug, property }: { agencySlug: string; prop
       <div>
         <Badge>{property.isPublished ? "Publie" : "Brouillon"}</Badge>
         <h3 className="mt-2 font-display text-3xl">{property.title}</h3>
-        <Button asChild className="mt-3 rounded-full">
-          <Link to="/agence/$slug/biens/$propertyId" params={{ slug: agencySlug, propertyId: property.id }}>
-            Gerer
-          </Link>
-        </Button>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild className="rounded-full">
+            <Link to="/agence/$slug/biens/$propertyId" params={{ slug: agencySlug, propertyId: property.id }}>
+              Gerer
+            </Link>
+          </Button>
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/a/$agencySlug/biens/$propertySlug" params={{ agencySlug, propertySlug: property.slug }}>
+              Voir public
+            </Link>
+          </Button>
+        </div>
       </div>
     </Panel>
   );
@@ -1638,9 +2288,9 @@ function Progress({ current }: { current: PropertySaleStep }) {
   );
 }
 
-function Panel({ children, className = "" }: { children: ReactNode; className?: string }) {
+function Panel({ children, className = "", id }: { children: ReactNode; className?: string; id?: string }) {
   return (
-    <div className={`rounded-[24px] border border-[#e8e0d5] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.04)] ${className}`}>
+    <div id={id} className={`rounded-[24px] border border-[#e8e0d5] bg-white shadow-[0_18px_45px_rgba(17,24,39,0.04)] ${className}`}>
       {children}
     </div>
   );
