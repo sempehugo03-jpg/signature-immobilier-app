@@ -1209,42 +1209,7 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
       </Header>
       {project.status === "demo_ready" && agency && (
         <Section>
-          <Panel className="p-5">
-            <Badge>Demo prete</Badge>
-            <h2 className="mt-3 font-display text-4xl">
-              Demo premium generee
-            </h2>
-            <p className="mt-2 max-w-2xl text-sm text-primary/55">
-              La base Signature Immobilier est prete pour le rendez-vous :
-              biens publics, espace agence, vendeur demo, visite, compte rendu
-              et document visible vendeur.
-            </p>
-            <div className="mt-5 flex flex-wrap gap-2">
-              <Button asChild className="rounded-full">
-                <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
-                  Voir la demo publique
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="rounded-full bg-white">
-                <Link to="/agence/$slug" params={{ slug: agency.slug }}>
-                  Ouvrir l'espace agence
-                </Link>
-              </Button>
-              {demoSeller && (
-                <Button asChild variant="outline" className="rounded-full bg-white">
-                  <Link
-                    to="/vendeur/$sellerToken"
-                    params={{ sellerToken: demoSeller.sellerToken }}
-                  >
-                    Ouvrir l'espace vendeur demo
-                  </Link>
-                </Button>
-              )}
-              <Button asChild variant="outline" className="rounded-full bg-white">
-                <Link to="/admin/agences">Retour aux agences</Link>
-              </Button>
-            </div>
-          </Panel>
+          <DemoAccessPanel agency={agency} sellerToken={demoSeller?.sellerToken} />
         </Section>
       )}
       <Section>
@@ -1329,9 +1294,13 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
   const { state, commit } = useV2Store();
   const agency = getAgencyById(state, agencyId);
   if (!agency) return <NotFound title="Agence introuvable" />;
+  const demoSeller = state.sellers.find((seller) => seller.agencyId === agency.id);
   return (
     <AdminShell>
       <Header title={agency.name} text={`Statut : ${agency.status}`} />
+      <Section>
+        <DemoAccessPanel agency={agency} sellerToken={demoSeller?.sellerToken} />
+      </Section>
       <Section>
         <Panel className="p-5">
           <h3 className="font-display text-3xl">Paiement et activation</h3>
@@ -1396,6 +1365,58 @@ export function AdminSubscriptionsPage() {
         />
       </Section>
     </AdminShell>
+  );
+}
+
+function DemoAccessPanel({
+  agency,
+  sellerToken,
+}: {
+  agency: Agency;
+  sellerToken?: string;
+}) {
+  return (
+    <Panel className="p-5">
+      <Badge>Demo prete</Badge>
+      <h2 className="mt-3 font-display text-4xl">Acces demo</h2>
+      <p className="mt-2 max-w-2xl text-sm text-primary/55">
+        Demo premium generee. Ouvrez directement les vues utiles pour le rendez-vous :
+        site public, espace patron, vue agent et espace vendeur.
+      </p>
+      <div className="mt-5 flex flex-wrap gap-2">
+        <Button asChild className="rounded-full">
+          <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
+            Voir le site public
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+            Ouvrir l'espace patron / agence
+          </Link>
+        </Button>
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+            Espace agent (vue agence provisoire)
+          </Link>
+        </Button>
+        {sellerToken ? (
+          <Button asChild variant="outline" className="rounded-full bg-white">
+            <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+              Ouvrir l'espace vendeur
+            </Link>
+          </Button>
+        ) : (
+          <span className="inline-flex items-center rounded-full border border-[#e8e0d5] bg-[#faf7f0] px-4 py-2 text-sm text-primary/55">
+            Aucun vendeur demo genere.
+          </span>
+        )}
+        <Button asChild variant="outline" className="rounded-full bg-white">
+          <Link to="/admin/agences/$agencyId" params={{ agencyId: agency.id }}>
+            Voir fiche agence admin
+          </Link>
+        </Button>
+      </div>
+    </Panel>
   );
 }
 
