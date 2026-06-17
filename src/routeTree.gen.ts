@@ -40,6 +40,8 @@ import { Route as AdminPreviewStudioRouteImport } from './routes/admin.preview-s
 import { Route as AdminAgencesRouteImport } from './routes/admin.agences'
 import { Route as AdminAbonnementsRouteImport } from './routes/admin.abonnements'
 import { Route as AAgencySlugRouteImport } from './routes/a.$agencySlug'
+import { Route as AdminPreviewStudioIndexRouteImport } from './routes/admin.preview-studio.index'
+import { Route as AdminAgencesIndexRouteImport } from './routes/admin.agences.index'
 import { Route as VendeurSellerTokenVisitesRouteImport } from './routes/vendeur.$sellerToken.visites'
 import { Route as VendeurSellerTokenDocumentsRouteImport } from './routes/vendeur.$sellerToken.documents'
 import { Route as VendeurSellerTokenBienRouteImport } from './routes/vendeur.$sellerToken.bien'
@@ -228,6 +230,16 @@ const AAgencySlugRoute = AAgencySlugRouteImport.update({
   id: '/a/$agencySlug',
   path: '/a/$agencySlug',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPreviewStudioIndexRoute = AdminPreviewStudioIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminPreviewStudioRoute,
+} as any)
+const AdminAgencesIndexRoute = AdminAgencesIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminAgencesRoute,
 } as any)
 const VendeurSellerTokenVisitesRoute =
   VendeurSellerTokenVisitesRouteImport.update({
@@ -465,6 +477,8 @@ export interface FileRoutesByFullPath {
   '/vendeur/$sellerToken/bien': typeof VendeurSellerTokenBienRoute
   '/vendeur/$sellerToken/documents': typeof VendeurSellerTokenDocumentsRoute
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
+  '/admin/agences/': typeof AdminAgencesIndexRoute
+  '/admin/preview-studio/': typeof AdminPreviewStudioIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
@@ -492,8 +506,6 @@ export interface FileRoutesByTo {
   '/vendeur': typeof VendeurRouteWithChildren
   '/a/$agencySlug': typeof AAgencySlugRouteWithChildren
   '/admin/abonnements': typeof AdminAbonnementsRoute
-  '/admin/agences': typeof AdminAgencesRouteWithChildren
-  '/admin/preview-studio': typeof AdminPreviewStudioRouteWithChildren
   '/admin/tarifs': typeof AdminTarifsRoute
   '/agence/$slug': typeof AgenceSlugRouteWithChildren
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
@@ -530,6 +542,8 @@ export interface FileRoutesByTo {
   '/vendeur/$sellerToken/bien': typeof VendeurSellerTokenBienRoute
   '/vendeur/$sellerToken/documents': typeof VendeurSellerTokenDocumentsRoute
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
+  '/admin/agences': typeof AdminAgencesIndexRoute
+  '/admin/preview-studio': typeof AdminPreviewStudioIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
@@ -597,6 +611,8 @@ export interface FileRoutesById {
   '/vendeur/$sellerToken/bien': typeof VendeurSellerTokenBienRoute
   '/vendeur/$sellerToken/documents': typeof VendeurSellerTokenDocumentsRoute
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
+  '/admin/agences/': typeof AdminAgencesIndexRoute
+  '/admin/preview-studio/': typeof AdminPreviewStudioIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
@@ -665,6 +681,8 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/bien'
     | '/vendeur/$sellerToken/documents'
     | '/vendeur/$sellerToken/visites'
+    | '/admin/agences/'
+    | '/admin/preview-studio/'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
@@ -692,8 +710,6 @@ export interface FileRouteTypes {
     | '/vendeur'
     | '/a/$agencySlug'
     | '/admin/abonnements'
-    | '/admin/agences'
-    | '/admin/preview-studio'
     | '/admin/tarifs'
     | '/agence/$slug'
     | '/agence/compte-rendu'
@@ -730,6 +746,8 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/bien'
     | '/vendeur/$sellerToken/documents'
     | '/vendeur/$sellerToken/visites'
+    | '/admin/agences'
+    | '/admin/preview-studio'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
@@ -796,6 +814,8 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/bien'
     | '/vendeur/$sellerToken/documents'
     | '/vendeur/$sellerToken/visites'
+    | '/admin/agences/'
+    | '/admin/preview-studio/'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
@@ -1056,6 +1076,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AAgencySlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/preview-studio/': {
+      id: '/admin/preview-studio/'
+      path: '/'
+      fullPath: '/admin/preview-studio/'
+      preLoaderRoute: typeof AdminPreviewStudioIndexRouteImport
+      parentRoute: typeof AdminPreviewStudioRoute
+    }
+    '/admin/agences/': {
+      id: '/admin/agences/'
+      path: '/'
+      fullPath: '/admin/agences/'
+      preLoaderRoute: typeof AdminAgencesIndexRouteImport
+      parentRoute: typeof AdminAgencesRoute
+    }
     '/vendeur/$sellerToken/visites': {
       id: '/vendeur/$sellerToken/visites'
       path: '/visites'
@@ -1292,10 +1326,12 @@ declare module '@tanstack/react-router' {
 
 interface AdminAgencesRouteChildren {
   AdminAgencesAgencyIdRoute: typeof AdminAgencesAgencyIdRoute
+  AdminAgencesIndexRoute: typeof AdminAgencesIndexRoute
 }
 
 const AdminAgencesRouteChildren: AdminAgencesRouteChildren = {
   AdminAgencesAgencyIdRoute: AdminAgencesAgencyIdRoute,
+  AdminAgencesIndexRoute: AdminAgencesIndexRoute,
 }
 
 const AdminAgencesRouteWithChildren = AdminAgencesRoute._addFileChildren(
@@ -1305,11 +1341,13 @@ const AdminAgencesRouteWithChildren = AdminAgencesRoute._addFileChildren(
 interface AdminPreviewStudioRouteChildren {
   AdminPreviewStudioPreviewIdRoute: typeof AdminPreviewStudioPreviewIdRoute
   AdminPreviewStudioNouveauRoute: typeof AdminPreviewStudioNouveauRoute
+  AdminPreviewStudioIndexRoute: typeof AdminPreviewStudioIndexRoute
 }
 
 const AdminPreviewStudioRouteChildren: AdminPreviewStudioRouteChildren = {
   AdminPreviewStudioPreviewIdRoute: AdminPreviewStudioPreviewIdRoute,
   AdminPreviewStudioNouveauRoute: AdminPreviewStudioNouveauRoute,
+  AdminPreviewStudioIndexRoute: AdminPreviewStudioIndexRoute,
 }
 
 const AdminPreviewStudioRouteWithChildren =

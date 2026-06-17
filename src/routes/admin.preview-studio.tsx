@@ -1,7 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { PreviewStudioListPage } from "@/lib/v2/pages";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/admin/preview-studio")({
-  component: PreviewStudioListPage,
+  component: AdminPreviewStudioLayoutRoute,
 });
+
+function AdminPreviewStudioLayoutRoute() {
+  return <Outlet />;
+}

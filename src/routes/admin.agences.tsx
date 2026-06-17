@@ -1,7 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { AdminAgenciesPage } from "@/lib/v2/pages";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/admin/agences")({
-  component: AdminAgenciesPage,
+  component: AdminAgenciesLayoutRoute,
 });
+
+function AdminAgenciesLayoutRoute() {
+  return <Outlet />;
+}
