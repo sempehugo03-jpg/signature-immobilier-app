@@ -1189,6 +1189,9 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
   const [instruction, setInstruction] = useState("");
   if (!project) return <NotFound title="Projet introuvable" />;
   const agency = getAgencyById(state, project.agencyId);
+  const demoSeller = agency
+    ? state.sellers.find((seller) => seller.agencyId === agency.id)
+    : null;
 
   function addAi(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1204,6 +1207,46 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
           Generer la demo premium
         </Button>
       </Header>
+      {project.status === "demo_ready" && agency && (
+        <Section>
+          <Panel className="p-5">
+            <Badge>Demo prete</Badge>
+            <h2 className="mt-3 font-display text-4xl">
+              Demo premium generee
+            </h2>
+            <p className="mt-2 max-w-2xl text-sm text-primary/55">
+              La base Signature Immobilier est prete pour le rendez-vous :
+              biens publics, espace agence, vendeur demo, visite, compte rendu
+              et document visible vendeur.
+            </p>
+            <div className="mt-5 flex flex-wrap gap-2">
+              <Button asChild className="rounded-full">
+                <Link to="/a/$agencySlug" params={{ agencySlug: agency.slug }}>
+                  Voir la demo publique
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="rounded-full bg-white">
+                <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+                  Ouvrir l'espace agence
+                </Link>
+              </Button>
+              {demoSeller && (
+                <Button asChild variant="outline" className="rounded-full bg-white">
+                  <Link
+                    to="/vendeur/$sellerToken"
+                    params={{ sellerToken: demoSeller.sellerToken }}
+                  >
+                    Ouvrir l'espace vendeur demo
+                  </Link>
+                </Button>
+              )}
+              <Button asChild variant="outline" className="rounded-full bg-white">
+                <Link to="/admin/agences">Retour aux agences</Link>
+              </Button>
+            </div>
+          </Panel>
+        </Section>
+      )}
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           <Panel className="p-5">

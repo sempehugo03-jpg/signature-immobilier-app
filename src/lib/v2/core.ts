@@ -811,55 +811,380 @@ export function generatePreviewDemo(state: V2State, previewId: string) {
   const agency = getAgencyById(state, project.agencyId);
   if (!agency) return state;
 
-  const importedProperties = project.scrapedProperties
-    .filter((property) => property.status !== "ignored")
-    .map((property) => {
-      const id = makeId("property");
-      return {
-        id,
-        agencyId: agency.id,
-        agencySlug: agency.slug,
-        slug: slugify(property.title),
-        title: property.title,
-        city: property.city,
-        district: "Centre",
-        address: "Quartier a confirmer",
-        price: property.price,
-        surface: property.surface,
-        rooms: property.rooms,
-        type: property.type,
-        description: property.description,
-        highlights: ["Photo immersive", "Annonce rassurante", "Suivi vendeur"],
-        publicBadge: "Coup de coeur" as PublicBadge,
-        isPublished: true,
-        saleStep: "listing_published" as PropertySaleStep,
-        photos: property.photos.map((url, index) => ({
-          id: makeId("photo"),
-          propertyId: id,
-          url,
-          name: `photo-${index + 1}.jpg`,
-          alt: property.title,
-          isMain: index === 0,
-          order: index,
-        })),
-        createdAt: nowIso(),
-        updatedAt: nowIso(),
-      };
-    });
+  const demoBase = createSignatureDemoBase(project, agency);
 
   return {
     ...state,
-    properties: [...importedProperties, ...state.properties],
+    agencies: state.agencies.map((item) =>
+      item.id === agency.id
+        ? {
+            ...item,
+            phone: item.phone || project.phone || "04 00 00 00 00",
+            email: item.email || project.email || "contact@signature-demo.fr",
+            status: "demo",
+          }
+        : item,
+    ),
+    properties: [
+      ...demoBase.properties,
+      ...state.properties.filter((property) => property.agencyId !== agency.id),
+    ],
+    teamMembers: [
+      ...demoBase.teamMembers,
+      ...state.teamMembers.filter((member) => member.agencyId !== agency.id),
+    ],
+    sellers: [
+      ...demoBase.sellers,
+      ...state.sellers.filter((seller) => seller.agencyId !== agency.id),
+    ],
+    visits: [
+      ...demoBase.visits,
+      ...state.visits.filter((visit) => visit.agencyId !== agency.id),
+    ],
+    reports: [
+      ...demoBase.reports,
+      ...state.reports.filter((report) => report.agencyId !== agency.id),
+    ],
+    documents: [
+      ...demoBase.documents,
+      ...state.documents.filter((document) => document.agencyId !== agency.id),
+    ],
+    estimationRequests: [
+      ...demoBase.estimationRequests,
+      ...state.estimationRequests.filter(
+        (request) => request.agencyId !== agency.id,
+      ),
+    ],
+    visitRequests: [
+      ...demoBase.visitRequests,
+      ...state.visitRequests.filter((request) => request.agencyId !== agency.id),
+    ],
+    callbackRequests: [
+      ...demoBase.callbackRequests,
+      ...state.callbackRequests.filter(
+        (request) => request.agencyId !== agency.id,
+      ),
+    ],
     previewProjects: state.previewProjects.map((item) =>
       item.id === previewId
         ? {
             ...item,
             status: "demo_ready",
+            scrapedProperties: item.scrapedProperties.map((property) =>
+              property.status === "ignored"
+                ? property
+                : { ...property, status: "imported" },
+            ),
             meetingBrief: createMeetingBrief(item),
           }
         : item,
     ),
   };
+}
+
+type SignatureDemoPropertySeed = {
+  title: string;
+  city: string;
+  district: string;
+  address: string;
+  price: number;
+  surface: number;
+  rooms: number;
+  type: string;
+  description: string;
+  highlights: string[];
+  publicBadge: PublicBadge;
+  saleStep: PropertySaleStep;
+  photos: string[];
+};
+
+function createSignatureDemoBase(project: PreviewProject, agency: Agency) {
+  const createdAt = nowIso();
+  const sellerToken = `vendeur-${agency.slug}-demo`;
+  const managerId = `member_${agency.slug}_manager`;
+  const agentId = `member_${agency.slug}_agent`;
+  const seeds = createSignatureDemoPropertySeeds(project, agency);
+  const properties: Property[] = seeds.map((seed, index) =>
+    createSignatureDemoProperty({
+      agency,
+      seed,
+      index,
+      createdAt,
+      assignedAgentId: agentId,
+      sellerToken: index === 0 ? sellerToken : undefined,
+    }),
+  );
+  const sellerProperty = properties[0];
+
+  const teamMembers: TeamMember[] = [
+    {
+      id: managerId,
+      agencyId: agency.id,
+      role: "manager",
+      firstName: "Hugo",
+      lastName: "Demo",
+      email: project.email || `direction@${agency.slug}.demo`,
+      phone: project.phone || agency.phone || "06 00 00 00 01",
+      status: "active",
+    },
+    {
+      id: agentId,
+      agencyId: agency.id,
+      role: "agent",
+      firstName: "Camille",
+      lastName: "Martin",
+      email: `camille@${agency.slug}.demo`,
+      phone: "06 00 00 00 02",
+      status: "active",
+    },
+  ];
+
+  const sellers: SellerProfile[] = [
+    {
+      id: `seller_profile_${agency.slug}_demo`,
+      agencyId: agency.id,
+      propertyId: sellerProperty.id,
+      sellerToken,
+      firstName: "Claire",
+      lastName: "Bernard",
+      email: `vendeur@${agency.slug}.demo`,
+      phone: "06 00 00 00 03",
+      status: "active",
+      inviteUrl: `/creer-acces/invite-${agency.slug}-demo`,
+    },
+  ];
+
+  const visitId = `visit_${agency.slug}_demo_next`;
+  const visits: PropertyVisit[] = [
+    {
+      id: visitId,
+      agencyId: agency.id,
+      propertyId: sellerProperty.id,
+      date: demoDateIn(3),
+      time: "10:30",
+      buyerName: "Famille Durand",
+      buyerPhone: "06 00 00 00 04",
+      internalNote: "Acheteurs qualifies pour la demonstration.",
+      sellerNote: "Visite confirmee avec un dossier de financement solide.",
+      status: "planned",
+    },
+  ];
+
+  const reports: PropertyReport[] = [
+    {
+      id: `report_${agency.slug}_demo_visible`,
+      agencyId: agency.id,
+      propertyId: sellerProperty.id,
+      visitId,
+      title: "Compte rendu visible vendeur",
+      content:
+        "Les visiteurs ont apprecie la luminosite, la qualite de presentation et la clarte du parcours. Un second echange est prevu.",
+      visibleToSeller: true,
+      createdAt,
+    },
+  ];
+
+  const documents: PropertyDocument[] = [
+    {
+      id: `doc_${agency.slug}_demo_diagnostics`,
+      agencyId: agency.id,
+      propertyId: sellerProperty.id,
+      name: "Diagnostics techniques",
+      documentType: "diagnostics",
+      url: "https://example.com/signature-demo-diagnostics.pdf",
+      fileName: "diagnostics-demo.pdf",
+      visibleToSeller: true,
+      createdAt,
+    },
+  ];
+
+  const estimationRequests: EstimationRequest[] = [
+    {
+      id: `estimation_${agency.slug}_demo`,
+      agencyId: agency.id,
+      propertyType: "Maison",
+      city: agency.city,
+      postalCode: "",
+      surface: 118,
+      condition: "bon",
+      sellingDelay: "3 mois",
+      firstName: "Paul",
+      lastName: "Riviere",
+      phone: "06 00 00 00 05",
+      email: `estimation@${agency.slug}.demo`,
+      message: "Demande demo issue de la base Signature Immobilier.",
+      lowEstimate: 520000,
+      highEstimate: 610000,
+      status: "new",
+      createdAt,
+    },
+  ];
+
+  const visitRequests: VisitRequest[] = [
+    {
+      id: `visit_request_${agency.slug}_demo`,
+      agencyId: agency.id,
+      propertyId: properties[1]?.id ?? sellerProperty.id,
+      firstName: "Emma",
+      lastName: "Laurent",
+      phone: "06 00 00 00 06",
+      email: `visite@${agency.slug}.demo`,
+      buyerSituation: "Residence principale",
+      financing: "Financement valide",
+      buyingDelay: "Moins de 3 mois",
+      message: "Souhaite visiter rapidement.",
+      status: "new",
+      createdAt,
+    },
+  ];
+
+  const callbackRequests: CallbackRequest[] = [
+    {
+      id: `callback_${agency.slug}_demo`,
+      agencyId: agency.id,
+      propertyId: sellerProperty.id,
+      firstName: "Nicolas",
+      lastName: "Petit",
+      phone: "06 00 00 00 07",
+      email: `rappel@${agency.slug}.demo`,
+      message: "Souhaite etre rappele apres consultation de la demo publique.",
+      status: "new",
+      createdAt,
+    },
+  ];
+
+  return {
+    properties,
+    teamMembers,
+    sellers,
+    visits,
+    reports,
+    documents,
+    estimationRequests,
+    visitRequests,
+    callbackRequests,
+  };
+}
+
+function createSignatureDemoPropertySeeds(
+  project: PreviewProject,
+  agency: Agency,
+): SignatureDemoPropertySeed[] {
+  const scrapedSeeds: SignatureDemoPropertySeed[] = project.scrapedProperties
+    .filter((property) => property.status !== "ignored")
+    .slice(0, 2)
+    .map((property, index) => ({
+      title: property.title,
+      city: property.city || agency.city,
+      district: index === 0 ? "Centre" : "Quartier residentiel",
+      address: "Adresse precise masquee cote public",
+      price: property.price,
+      surface: property.surface,
+      rooms: property.rooms,
+      type: property.type,
+      description: `${property.description} Cette fiche est enrichie par la base demo Signature pour montrer une presentation premium et un suivi vendeur clair.`,
+      highlights: ["Photo immersive", "Annonce rassurante", "Suivi vendeur"],
+      publicBadge: index === 0 ? "Coup de coeur" : "Nouveaute",
+      saleStep: index === 0 ? "visits_ongoing" : "listing_published",
+      photos: property.photos.length
+        ? property.photos
+        : [samplePhotos[index % samplePhotos.length]],
+    }));
+
+  const fallbackSeeds: SignatureDemoPropertySeed[] = [
+    {
+      title: `Maison Signature ${agency.city}`,
+      city: agency.city,
+      district: "Quartier residentiel",
+      address: "Adresse precise masquee cote public",
+      price: 735000,
+      surface: 132,
+      rooms: 6,
+      type: "Maison",
+      description:
+        "Maison familiale lumineuse, preparee pour une demonstration premium avec photos, progression vendeur, visite prevue et documents visibles.",
+      highlights: ["Piece de vie lumineuse", "Jardin calme", "Presentation premium"],
+      publicBadge: "Exclusivite",
+      saleStep: "visits_ongoing",
+      photos: [samplePhotos[0], samplePhotos[1]],
+    },
+    {
+      title: `Appartement lumineux ${agency.city}`,
+      city: agency.city,
+      district: "Centre",
+      address: "Adresse precise masquee cote public",
+      price: 420000,
+      surface: 84,
+      rooms: 4,
+      type: "Appartement",
+      description:
+        "Appartement pret a publier cote public, avec une fiche claire, des caracteristiques essentielles et une demande de visite demo.",
+      highlights: ["Balcon", "Plan optimise", "Proche commerces"],
+      publicBadge: "Nouveaute",
+      saleStep: "listing_published",
+      photos: [samplePhotos[2]],
+    },
+  ];
+
+  return [...scrapedSeeds, ...fallbackSeeds].slice(0, 2);
+}
+
+function createSignatureDemoProperty({
+  agency,
+  seed,
+  index,
+  createdAt,
+  assignedAgentId,
+  sellerToken,
+}: {
+  agency: Agency;
+  seed: SignatureDemoPropertySeed;
+  index: number;
+  createdAt: string;
+  assignedAgentId: string;
+  sellerToken?: string;
+}): Property {
+  const propertyId = `property_${agency.slug}_demo_${index + 1}`;
+  const photos = seed.photos.slice(0, 6).map((url, photoIndex) => ({
+    id: `photo_${agency.slug}_demo_${index + 1}_${photoIndex + 1}`,
+    propertyId,
+    url,
+    name: `photo-demo-${photoIndex + 1}.jpg`,
+    alt: seed.title,
+    isMain: photoIndex === 0,
+    order: photoIndex,
+  }));
+
+  return {
+    id: propertyId,
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    slug: `${slugify(seed.title)}-${index + 1}`,
+    title: seed.title,
+    city: seed.city,
+    district: seed.district,
+    address: seed.address,
+    price: seed.price,
+    surface: seed.surface,
+    rooms: seed.rooms,
+    type: seed.type,
+    description: seed.description,
+    highlights: seed.highlights,
+    publicBadge: seed.publicBadge,
+    assignedAgentId,
+    isPublished: true,
+    saleStep: seed.saleStep,
+    sellerToken,
+    photos,
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+
+function demoDateIn(days: number) {
+  const date = new Date();
+  date.setDate(date.getDate() + days);
+  return date.toISOString().slice(0, 10);
 }
 
 export function addPreviewAiRequest(
