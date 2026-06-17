@@ -1085,12 +1085,14 @@ export function AdminDashboardV2Page() {
             ["/admin/tarifs", "Tarifs"],
             ["/admin/abonnements", "Abonnements"],
           ].map(([href, label]) => (
-            <Panel key={href} className="p-5">
-              <h3 className="font-display text-3xl">{label}</h3>
-              <Button asChild variant="outline" className="mt-4 rounded-full bg-white">
-                <Link to={href}>Ouvrir</Link>
-              </Button>
-            </Panel>
+            <Link key={href} to={href} className="block">
+              <Panel className="p-5">
+                <h3 className="font-display text-3xl">{label}</h3>
+                <span className="mt-4 inline-flex rounded-full border border-[#e8e0d5] bg-white px-4 py-2 text-sm font-medium">
+                  Ouvrir
+                </span>
+              </Panel>
+            </Link>
           ))}
         </div>
       </Section>
