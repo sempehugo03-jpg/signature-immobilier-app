@@ -1244,18 +1244,122 @@ export function activateAgencyAfterPayment(
 }
 
 export function markPaymentValidated(state: V2State, agencyId: string) {
+  const existingSubscription = state.subscriptions.find(
+    (subscription) => subscription.agencyId === agencyId,
+  );
+  const fallbackPlan =
+    state.plans.find((plan) => plan.id === "signature") ?? state.plans[0];
+  const subscription: Subscription | null =
+    existingSubscription ??
+    (fallbackPlan
+      ? {
+          id: makeId("sub"),
+          agencyId,
+          planId: fallbackPlan.id,
+          status: "active",
+          monthlyAmount: fallbackPlan.monthlyFee,
+          stripePaymentUrl: `https://buy.stripe.com/test_signature_${agencyId}_${fallbackPlan.id}`,
+        }
+      : null);
+
+  return {
+    ...state,
+    agencies: state.agencies.map((agency) =>
+      agency.id === agencyId && agency.status !== "active"
+        ? { ...agency, status: "payment_pending" }
+        : agency,
+    ),
+    subscriptions: subscription
+      ? [
+          { ...subscription, status: "active" },
+          ...state.subscriptions.filter((item) => item.agencyId !== agencyId),
+        ]
+      : state.subscriptions,
+    previewProjects: state.previewProjects.map((project) =>
+      project.agencyId === agencyId && project.status !== "active"
+        ? { ...project, status: "payment_pending" }
+        : project,
+    ),
+  };
+}
+
+export function activateAgencySite(state: V2State, agencyId: string) {
+  const paymentValidated = state.subscriptions.some(
+    (subscription) =>
+      subscription.agencyId === agencyId && subscription.status === "active",
+  );
+  if (!paymentValidated) return state;
+
   return {
     ...state,
     agencies: state.agencies.map((agency) =>
       agency.id === agencyId ? { ...agency, status: "active" } : agency,
     ),
-    subscriptions: state.subscriptions.map((subscription) =>
-      subscription.agencyId === agencyId
-        ? { ...subscription, status: "active" }
-        : subscription,
-    ),
     previewProjects: state.previewProjects.map((project) =>
       project.agencyId === agencyId ? { ...project, status: "active" } : project,
+    ),
+  };
+}
+
+export function deletePreviewDemo(state: V2State, previewId: string) {
+  const project = state.previewProjects.find((item) => item.id === previewId);
+  if (!project) return state;
+  const agency = getAgencyById(state, project.agencyId);
+  const shouldDeleteAgency = agency?.status !== "active";
+
+  if (!shouldDeleteAgency) {
+    return {
+      ...state,
+      previewProjects: state.previewProjects.filter(
+        (item) => item.id !== previewId,
+      ),
+    };
+  }
+
+  return deleteAgencyDemo(
+    {
+      ...state,
+      previewProjects: state.previewProjects.filter(
+        (item) => item.id !== previewId,
+      ),
+    },
+    project.agencyId,
+  );
+}
+
+export function deleteAgencyDemo(state: V2State, agencyId: string) {
+  const agency = getAgencyById(state, agencyId);
+  if (!agency || agency.status === "active") return state;
+  const propertyIds = new Set(
+    state.properties
+      .filter((property) => property.agencyId === agencyId)
+      .map((property) => property.id),
+  );
+
+  return {
+    ...state,
+    agencies: state.agencies.filter((item) => item.id !== agencyId),
+    branding: state.branding.filter((item) => item.agencyId !== agencyId),
+    properties: state.properties.filter((item) => item.agencyId !== agencyId),
+    teamMembers: state.teamMembers.filter((item) => item.agencyId !== agencyId),
+    sellers: state.sellers.filter((item) => item.agencyId !== agencyId),
+    visits: state.visits.filter((item) => item.agencyId !== agencyId),
+    reports: state.reports.filter((item) => item.agencyId !== agencyId),
+    documents: state.documents.filter((item) => item.agencyId !== agencyId),
+    estimationRequests: state.estimationRequests.filter(
+      (item) => item.agencyId !== agencyId,
+    ),
+    visitRequests: state.visitRequests.filter(
+      (item) => item.agencyId !== agencyId && !propertyIds.has(item.propertyId),
+    ),
+    callbackRequests: state.callbackRequests.filter(
+      (item) => item.agencyId !== agencyId,
+    ),
+    previewProjects: state.previewProjects.filter(
+      (item) => item.agencyId !== agencyId,
+    ),
+    subscriptions: state.subscriptions.filter(
+      (item) => item.agencyId !== agencyId,
     ),
   };
 }

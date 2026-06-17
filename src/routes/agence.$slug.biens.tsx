@@ -1,12 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { AgencyPropertiesPage } from "@/lib/v2/pages";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/agence/$slug/biens")({
-  component: RouteComponent,
+  component: AgencyPropertiesLayoutRoute,
 });
 
-function RouteComponent() {
-  const { slug } = Route.useParams();
-  return <AgencyPropertiesPage agencySlug={slug} />;
+function AgencyPropertiesLayoutRoute() {
+  return <Outlet />;
 }

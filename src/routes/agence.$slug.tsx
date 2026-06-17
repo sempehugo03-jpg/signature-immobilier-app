@@ -1,12 +1,9 @@
-import { createFileRoute } from "@tanstack/react-router";
-
-import { AgencyDashboardPage } from "@/lib/v2/pages";
+import { createFileRoute, Outlet } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/agence/$slug")({
-  component: RouteComponent,
+  component: AgencyLayoutRoute,
 });
 
-function RouteComponent() {
-  const { slug } = Route.useParams();
-  return <AgencyDashboardPage agencySlug={slug} />;
+function AgencyLayoutRoute() {
+  return <Outlet />;
 }
