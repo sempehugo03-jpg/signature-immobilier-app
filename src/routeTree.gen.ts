@@ -40,6 +40,7 @@ import { Route as AdminPreviewStudioRouteImport } from './routes/admin.preview-s
 import { Route as AdminAgencesRouteImport } from './routes/admin.agences'
 import { Route as AdminAbonnementsRouteImport } from './routes/admin.abonnements'
 import { Route as AAgencySlugRouteImport } from './routes/a.$agencySlug'
+import { Route as AgenceSlugIndexRouteImport } from './routes/agence.$slug.index'
 import { Route as AdminPreviewStudioIndexRouteImport } from './routes/admin.preview-studio.index'
 import { Route as AdminAgencesIndexRouteImport } from './routes/admin.agences.index'
 import { Route as VendeurSellerTokenVisitesRouteImport } from './routes/vendeur.$sellerToken.visites'
@@ -69,6 +70,7 @@ import { Route as AdminAgencesAgencyIdRouteImport } from './routes/admin.agences
 import { Route as AccesAgenceTokenRouteImport } from './routes/acces.agence.$token'
 import { Route as AAgencySlugEstimationRouteImport } from './routes/a.$agencySlug.estimation'
 import { Route as AAgencySlugBiensRouteImport } from './routes/a.$agencySlug.biens'
+import { Route as AgenceSlugBiensIndexRouteImport } from './routes/agence.$slug.biens.index'
 import { Route as AgenceSlugVendeurSellerTokenRouteImport } from './routes/agence.$slug.vendeur.$sellerToken'
 import { Route as AgenceSlugBiensNouveauRouteImport } from './routes/agence.$slug.biens.nouveau'
 import { Route as AgenceSlugBiensPropertyIdRouteImport } from './routes/agence.$slug.biens.$propertyId'
@@ -231,6 +233,11 @@ const AAgencySlugRoute = AAgencySlugRouteImport.update({
   path: '/a/$agencySlug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgenceSlugIndexRoute = AgenceSlugIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AgenceSlugRoute,
+} as any)
 const AdminPreviewStudioIndexRoute = AdminPreviewStudioIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -382,6 +389,11 @@ const AAgencySlugBiensRoute = AAgencySlugBiensRouteImport.update({
   path: '/biens',
   getParentRoute: () => AAgencySlugRoute,
 } as any)
+const AgenceSlugBiensIndexRoute = AgenceSlugBiensIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AgenceSlugBiensRoute,
+} as any)
 const AgenceSlugVendeurSellerTokenRoute =
   AgenceSlugVendeurSellerTokenRouteImport.update({
     id: '/vendeur/$sellerToken',
@@ -479,10 +491,12 @@ export interface FileRoutesByFullPath {
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
   '/admin/agences/': typeof AdminAgencesIndexRoute
   '/admin/preview-studio/': typeof AdminPreviewStudioIndexRoute
+  '/agence/$slug/': typeof AgenceSlugIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
+  '/agence/$slug/biens/': typeof AgenceSlugBiensIndexRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
 }
@@ -507,7 +521,6 @@ export interface FileRoutesByTo {
   '/a/$agencySlug': typeof AAgencySlugRouteWithChildren
   '/admin/abonnements': typeof AdminAbonnementsRoute
   '/admin/tarifs': typeof AdminTarifsRoute
-  '/agence/$slug': typeof AgenceSlugRouteWithChildren
   '/agence/compte-rendu': typeof AgenceCompteRenduRoute
   '/biens/$propertyId': typeof BiensPropertyIdRoute
   '/creer-acces/$token': typeof CreerAccesTokenRoute
@@ -523,7 +536,6 @@ export interface FileRoutesByTo {
   '/admin/preview-studio/$previewId': typeof AdminPreviewStudioPreviewIdRoute
   '/admin/preview-studio/nouveau': typeof AdminPreviewStudioNouveauRoute
   '/agence/$slug/agents': typeof AgenceSlugAgentsRoute
-  '/agence/$slug/biens': typeof AgenceSlugBiensRouteWithChildren
   '/agence/$slug/demandes-visites': typeof AgenceSlugDemandesVisitesRoute
   '/agence/$slug/equipe': typeof AgenceSlugEquipeRoute
   '/agence/$slug/estimation': typeof AgenceSlugEstimationRoute
@@ -544,10 +556,12 @@ export interface FileRoutesByTo {
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
   '/admin/agences': typeof AdminAgencesIndexRoute
   '/admin/preview-studio': typeof AdminPreviewStudioIndexRoute
+  '/agence/$slug': typeof AgenceSlugIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
+  '/agence/$slug/biens': typeof AgenceSlugBiensIndexRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
 }
@@ -613,10 +627,12 @@ export interface FileRoutesById {
   '/vendeur/$sellerToken/visites': typeof VendeurSellerTokenVisitesRoute
   '/admin/agences/': typeof AdminAgencesIndexRoute
   '/admin/preview-studio/': typeof AdminPreviewStudioIndexRoute
+  '/agence/$slug/': typeof AgenceSlugIndexRoute
   '/a/$agencySlug/biens/$propertySlug': typeof AAgencySlugBiensPropertySlugRoute
   '/agence/$slug/biens/$propertyId': typeof AgenceSlugBiensPropertyIdRouteWithChildren
   '/agence/$slug/biens/nouveau': typeof AgenceSlugBiensNouveauRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
+  '/agence/$slug/biens/': typeof AgenceSlugBiensIndexRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
 }
@@ -683,10 +699,12 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/visites'
     | '/admin/agences/'
     | '/admin/preview-studio/'
+    | '/agence/$slug/'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
     | '/agence/$slug/vendeur/$sellerToken'
+    | '/agence/$slug/biens/'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
   fileRoutesByTo: FileRoutesByTo
@@ -711,7 +729,6 @@ export interface FileRouteTypes {
     | '/a/$agencySlug'
     | '/admin/abonnements'
     | '/admin/tarifs'
-    | '/agence/$slug'
     | '/agence/compte-rendu'
     | '/biens/$propertyId'
     | '/creer-acces/$token'
@@ -727,7 +744,6 @@ export interface FileRouteTypes {
     | '/admin/preview-studio/$previewId'
     | '/admin/preview-studio/nouveau'
     | '/agence/$slug/agents'
-    | '/agence/$slug/biens'
     | '/agence/$slug/demandes-visites'
     | '/agence/$slug/equipe'
     | '/agence/$slug/estimation'
@@ -748,10 +764,12 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/visites'
     | '/admin/agences'
     | '/admin/preview-studio'
+    | '/agence/$slug'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
     | '/agence/$slug/vendeur/$sellerToken'
+    | '/agence/$slug/biens'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
   id:
@@ -816,10 +834,12 @@ export interface FileRouteTypes {
     | '/vendeur/$sellerToken/visites'
     | '/admin/agences/'
     | '/admin/preview-studio/'
+    | '/agence/$slug/'
     | '/a/$agencySlug/biens/$propertySlug'
     | '/agence/$slug/biens/$propertyId'
     | '/agence/$slug/biens/nouveau'
     | '/agence/$slug/vendeur/$sellerToken'
+    | '/agence/$slug/biens/'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
   fileRoutesById: FileRoutesById
@@ -1076,6 +1096,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AAgencySlugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agence/$slug/': {
+      id: '/agence/$slug/'
+      path: '/'
+      fullPath: '/agence/$slug/'
+      preLoaderRoute: typeof AgenceSlugIndexRouteImport
+      parentRoute: typeof AgenceSlugRoute
+    }
     '/admin/preview-studio/': {
       id: '/admin/preview-studio/'
       path: '/'
@@ -1279,6 +1306,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AAgencySlugBiensRouteImport
       parentRoute: typeof AAgencySlugRoute
     }
+    '/agence/$slug/biens/': {
+      id: '/agence/$slug/biens/'
+      path: '/'
+      fullPath: '/agence/$slug/biens/'
+      preLoaderRoute: typeof AgenceSlugBiensIndexRouteImport
+      parentRoute: typeof AgenceSlugBiensRoute
+    }
     '/agence/$slug/vendeur/$sellerToken': {
       id: '/agence/$slug/vendeur/$sellerToken'
       path: '/vendeur/$sellerToken'
@@ -1451,11 +1485,13 @@ const AgenceSlugBiensPropertyIdRouteWithChildren =
 interface AgenceSlugBiensRouteChildren {
   AgenceSlugBiensPropertyIdRoute: typeof AgenceSlugBiensPropertyIdRouteWithChildren
   AgenceSlugBiensNouveauRoute: typeof AgenceSlugBiensNouveauRoute
+  AgenceSlugBiensIndexRoute: typeof AgenceSlugBiensIndexRoute
 }
 
 const AgenceSlugBiensRouteChildren: AgenceSlugBiensRouteChildren = {
   AgenceSlugBiensPropertyIdRoute: AgenceSlugBiensPropertyIdRouteWithChildren,
   AgenceSlugBiensNouveauRoute: AgenceSlugBiensNouveauRoute,
+  AgenceSlugBiensIndexRoute: AgenceSlugBiensIndexRoute,
 }
 
 const AgenceSlugBiensRouteWithChildren = AgenceSlugBiensRoute._addFileChildren(
@@ -1471,6 +1507,7 @@ interface AgenceSlugRouteChildren {
   AgenceSlugEstimationsRoute: typeof AgenceSlugEstimationsRoute
   AgenceSlugSettingsRoute: typeof AgenceSlugSettingsRoute
   AgenceSlugVendeursRoute: typeof AgenceSlugVendeursRoute
+  AgenceSlugIndexRoute: typeof AgenceSlugIndexRoute
   AgenceSlugVendeurSellerTokenRoute: typeof AgenceSlugVendeurSellerTokenRoute
 }
 
@@ -1483,6 +1520,7 @@ const AgenceSlugRouteChildren: AgenceSlugRouteChildren = {
   AgenceSlugEstimationsRoute: AgenceSlugEstimationsRoute,
   AgenceSlugSettingsRoute: AgenceSlugSettingsRoute,
   AgenceSlugVendeursRoute: AgenceSlugVendeursRoute,
+  AgenceSlugIndexRoute: AgenceSlugIndexRoute,
   AgenceSlugVendeurSellerTokenRoute: AgenceSlugVendeurSellerTokenRoute,
 }
 

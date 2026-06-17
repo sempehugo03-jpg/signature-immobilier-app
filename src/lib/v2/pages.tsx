@@ -22,6 +22,7 @@ import { signOutEverywhere } from "@/lib/session-cleanup";
 import { supabase } from "@/lib/supabase";
 import {
   activateAgencyAfterPayment,
+  activateAgencySite,
   addPreviewAiRequest,
   addPropertyDocument,
   addPropertyReport,
@@ -34,6 +35,8 @@ import {
   createSellerAccess,
   createTeamInvite,
   createVisitRequest,
+  deleteAgencyDemo,
+  deletePreviewDemo,
   formatDate,
   formatPrice,
   generatePreviewDemo,
@@ -906,7 +909,7 @@ export function AgencyPropertyManagePage({
                 Visible vendeur
               </label>
             </PanelForm>
-            <PanelForm title="Associer vendeur" onSubmit={addSeller}>
+            <PanelForm title="Espace vendeur" onSubmit={addSeller}>
               <Input name="firstName" placeholder="Prenom" required />
               <Input name="lastName" placeholder="Nom" required />
               <Input name="email" type="email" placeholder="Email" required />
@@ -1101,7 +1104,21 @@ export function AdminDashboardV2Page() {
 }
 
 export function PreviewStudioListPage() {
-  const { state } = useV2Store();
+  const { state, commit } = useV2Store();
+  const [feedback, setFeedback] = useState("");
+
+  function removePreview(previewId: string) {
+    if (
+      !window.confirm(
+        "Supprimer cette demo et ses donnees pilotes associees ?",
+      )
+    ) {
+      return;
+    }
+    commit(deletePreviewDemo(state, previewId));
+    setFeedback("Demo supprimee.");
+  }
+
   return (
     <AdminShell>
       <Header title="Signature Preview Studio" text="Creer et piloter les demos premium." >
@@ -1110,6 +1127,11 @@ export function PreviewStudioListPage() {
         </Button>
       </Header>
       <Section>
+        {feedback && (
+          <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">
+            {feedback}
+          </div>
+        )}
         <ListPanels
           items={state.previewProjects}
           render={(project) => (
@@ -1121,6 +1143,14 @@ export function PreviewStudioListPage() {
                 <Link to="/admin/preview-studio/$previewId" params={{ previewId: project.id }}>
                   Ouvrir
                 </Link>
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-2 rounded-full bg-white"
+                onClick={() => removePreview(project.id)}
+              >
+                Supprimer
               </Button>
             </>
           )}
@@ -1187,8 +1217,10 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
   const { state, commit } = useV2Store();
   const project = state.previewProjects.find((item) => item.id === previewId);
   const [instruction, setInstruction] = useState("");
+  const [managerFeedback, setManagerFeedback] = useState("");
   if (!project) return <NotFound title="Projet introuvable" />;
   const agency = getAgencyById(state, project.agencyId);
+  if (!agency) return <NotFound title="Agence introuvable" />;
   const demoSeller = agency
     ? state.sellers.find((seller) => seller.agencyId === agency.id)
     : null;
@@ -1200,18 +1232,29 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
     setInstruction("");
   }
 
+  function addManager(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isPaymentValidated(state, agency.id)) {
+      setManagerFeedback("Validez le paiement avant d'activer l'agence.");
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    commit(
+      createTeamInvite(state, agency.id, {
+        role: "manager",
+        firstName: readForm(form, "firstName"),
+        lastName: readForm(form, "lastName"),
+        email: readForm(form, "email"),
+        phone: readForm(form, "phone"),
+      }),
+    );
+    event.currentTarget.reset();
+    setManagerFeedback("Patron / manager ajoute.");
+  }
+
   return (
     <AdminShell>
-      <Header title={project.agencyName} text={project.analysisSummary}>
-        <Button className="rounded-full" onClick={() => commit(generatePreviewDemo(state, project.id))}>
-          Generer la demo premium
-        </Button>
-      </Header>
-      {project.status === "demo_ready" && agency && (
-        <Section>
-          <DemoAccessPanel agency={agency} sellerToken={demoSeller?.sellerToken} />
-        </Section>
-      )}
+      <Header title={project.agencyName} text={project.analysisSummary} />
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           <Panel className="p-5">
@@ -1231,33 +1274,31 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
             ))}
           </Panel>
           <Panel className="p-5">
+            <h3 className="font-display text-3xl">Generer la demo premium</h3>
+            <p className="mt-2 text-sm text-primary/55">
+              Cree la base demo exploitable : biens, equipe, vendeur, visite,
+              compte rendu et documents visibles.
+            </p>
+            <Button className="mt-4 rounded-full" onClick={() => commit(generatePreviewDemo(state, project.id))}>
+              Generer la demo premium
+            </Button>
+          </Panel>
+          {["demo_ready", "payment_pending", "active"].includes(project.status) && (
+            <DemoAccessPanel agency={agency} sellerToken={demoSeller?.sellerToken} />
+          )}
+          <Panel className="p-5">
             <h3 className="font-display text-3xl">Modifier avec IA</h3>
             <form className="mt-4 space-y-3" onSubmit={addAi}>
               <Textarea value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Ex : rends le site plus premium" />
               <Button className="rounded-full">Generer proposition</Button>
             </form>
           </Panel>
-          <Panel className="p-5">
-            <h3 className="font-display text-3xl">Activation apres paiement</h3>
-            <p className="mt-2 text-sm text-primary/55">
-              Aucune agence ne passe active sans paiement valide.
-            </p>
-            <div className="mt-4 flex flex-wrap gap-2">
-              {state.plans.map((plan) => (
-                <Button key={plan.id} variant="outline" className="rounded-full bg-white" onClick={() => commit(activateAgencyAfterPayment(state, project.agencyId, plan.id))}>
-                  Choisir {plan.name}
-                </Button>
-              ))}
-              <Button className="rounded-full" onClick={() => commit(markPaymentValidated(state, project.agencyId))}>
-                Paiement valide
-              </Button>
-            </div>
-            {agency?.stripePaymentUrl && (
-              <a href={agency.stripePaymentUrl} className="mt-4 block break-all text-sm">
-                {agency.stripePaymentUrl}
-              </a>
-            )}
-          </Panel>
+          <AgencyPaymentPanel state={state} agency={agency} commit={commit} />
+          <ManagerAccessPanel
+            feedback={managerFeedback}
+            onSubmit={addManager}
+            paymentValidated={isPaymentValidated(state, agency.id)}
+          />
         </div>
       </Section>
     </AdminShell>
@@ -1265,11 +1306,26 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
 }
 
 export function AdminAgenciesPage() {
-  const { state } = useV2Store();
+  const { state, commit } = useV2Store();
+  const [feedback, setFeedback] = useState("");
+
+  function removeAgencyDemo(agencyId: string) {
+    if (!window.confirm("Supprimer cette agence demo et ses donnees pilotes ?")) {
+      return;
+    }
+    commit(deleteAgencyDemo(state, agencyId));
+    setFeedback("Agence demo supprimee.");
+  }
+
   return (
     <AdminShell>
       <Header title="Agences" text="Toutes les agences demo, actives ou perdues." />
       <Section>
+        {feedback && (
+          <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">
+            {feedback}
+          </div>
+        )}
         <ListPanels
           items={state.agencies}
           render={(agency) => (
@@ -1282,6 +1338,16 @@ export function AdminAgenciesPage() {
                   Ouvrir fiche
                 </Link>
               </Button>
+              {agency.status !== "active" && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-2 rounded-full bg-white"
+                  onClick={() => removeAgencyDemo(agency.id)}
+                >
+                  Supprimer demo
+                </Button>
+              )}
             </>
           )}
         />
@@ -1292,9 +1358,31 @@ export function AdminAgenciesPage() {
 
 export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
   const { state, commit } = useV2Store();
+  const [managerFeedback, setManagerFeedback] = useState("");
   const agency = getAgencyById(state, agencyId);
   if (!agency) return <NotFound title="Agence introuvable" />;
   const demoSeller = state.sellers.find((seller) => seller.agencyId === agency.id);
+
+  function addManager(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!isPaymentValidated(state, agency.id)) {
+      setManagerFeedback("Validez le paiement avant d'activer l'agence.");
+      return;
+    }
+    const form = new FormData(event.currentTarget);
+    commit(
+      createTeamInvite(state, agency.id, {
+        role: "manager",
+        firstName: readForm(form, "firstName"),
+        lastName: readForm(form, "lastName"),
+        email: readForm(form, "email"),
+        phone: readForm(form, "phone"),
+      }),
+    );
+    event.currentTarget.reset();
+    setManagerFeedback("Patron / manager ajoute.");
+  }
+
   return (
     <AdminShell>
       <Header title={agency.name} text={`Statut : ${agency.status}`} />
@@ -1302,19 +1390,14 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
         <DemoAccessPanel agency={agency} sellerToken={demoSeller?.sellerToken} />
       </Section>
       <Section>
-        <Panel className="p-5">
-          <h3 className="font-display text-3xl">Paiement et activation</h3>
-          <div className="mt-4 flex flex-wrap gap-2">
-            {state.plans.map((plan) => (
-              <Button key={plan.id} variant="outline" className="rounded-full bg-white" onClick={() => commit(activateAgencyAfterPayment(state, agency.id, plan.id))}>
-                Lien {plan.name}
-              </Button>
-            ))}
-            <Button className="rounded-full" onClick={() => commit(markPaymentValidated(state, agency.id))}>
-              Valider paiement
-            </Button>
-          </div>
-        </Panel>
+        <div className="grid gap-5 md:grid-cols-2">
+          <AgencyPaymentPanel state={state} agency={agency} commit={commit} />
+          <ManagerAccessPanel
+            feedback={managerFeedback}
+            onSubmit={addManager}
+            paymentValidated={isPaymentValidated(state, agency.id)}
+          />
+        </div>
       </Section>
     </AdminShell>
   );
@@ -1365,6 +1448,114 @@ export function AdminSubscriptionsPage() {
         />
       </Section>
     </AdminShell>
+  );
+}
+
+function AgencyPaymentPanel({
+  state,
+  agency,
+  commit,
+}: {
+  state: V2State;
+  agency: Agency;
+  commit: (next: V2State) => void;
+}) {
+  const [feedback, setFeedback] = useState("");
+  const subscription = state.subscriptions.find(
+    (item) => item.agencyId === agency.id,
+  );
+  const paymentValidated = isPaymentValidated(state, agency.id);
+
+  function choosePlan(planId: "essential" | "signature" | "premium") {
+    commit(activateAgencyAfterPayment(state, agency.id, planId));
+    setFeedback("Lien de paiement pilote genere.");
+  }
+
+  function validatePayment() {
+    commit(markPaymentValidated(state, agency.id));
+    setFeedback("Paiement valide.");
+  }
+
+  function activateAgency() {
+    if (!paymentValidated) {
+      setFeedback("Validez le paiement avant d'activer l'agence.");
+      return;
+    }
+    commit(activateAgencySite(state, agency.id));
+    setFeedback("Agence activee.");
+  }
+
+  return (
+    <Panel className="p-5">
+      <h3 className="font-display text-3xl">Paiement / activation agence</h3>
+      <p className="mt-2 text-sm text-primary/55">
+        {paymentValidated ? "Paiement valide." : "Paiement en attente."}
+      </p>
+      <div className="mt-4 flex flex-wrap gap-2">
+        {state.plans.map((plan) => (
+          <Button
+            key={plan.id}
+            type="button"
+            variant="outline"
+            className="rounded-full bg-white"
+            onClick={() => choosePlan(plan.id)}
+          >
+            Lien {plan.name}
+          </Button>
+        ))}
+        <Button type="button" className="rounded-full" onClick={validatePayment}>
+          Paiement valide
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          className="rounded-full bg-white"
+          onClick={activateAgency}
+        >
+          Activer l'agence
+        </Button>
+      </div>
+      {subscription?.stripePaymentUrl && (
+        <a href={subscription.stripePaymentUrl} className="mt-4 block break-all text-sm">
+          {subscription.stripePaymentUrl}
+        </a>
+      )}
+      {agency.status === "active" && (
+        <p className="mt-3 text-sm text-emerald-700">Agence active.</p>
+      )}
+      {feedback && <p className="mt-3 text-sm text-emerald-700">{feedback}</p>}
+    </Panel>
+  );
+}
+
+function ManagerAccessPanel({
+  feedback,
+  onSubmit,
+  paymentValidated,
+}: {
+  feedback: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  paymentValidated: boolean;
+}) {
+  return (
+    <Panel className="p-5">
+      <h3 className="font-display text-3xl">Acces equipe</h3>
+      {!paymentValidated && (
+        <p className="mt-2 text-sm text-primary/55">
+          Validez le paiement avant d'activer l'agence.
+        </p>
+      )}
+      <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={onSubmit}>
+        <Input name="firstName" placeholder="Prenom patron" required />
+        <Input name="lastName" placeholder="Nom patron" required />
+        <Input name="email" type="email" placeholder="Email patron" required />
+        <Input name="phone" placeholder="Telephone" />
+        <Button className="rounded-full md:col-span-2">
+          Ajouter patron / manager
+        </Button>
+      </form>
+      {feedback && <p className="mt-3 text-sm text-emerald-700">{feedback}</p>}
+    </Panel>
   );
 }
 
@@ -1458,6 +1649,7 @@ function AgencyShell({ agency, children }: { agency: Agency; children: ReactNode
   return (
     <PrivateShell
       title={agency.name}
+      useBrowserNavigation
       links={[
         ["Dashboard", `/agence/${agency.slug}`],
         ["Biens", `/agence/${agency.slug}/biens`],
@@ -1778,6 +1970,13 @@ function sellerLinks(sellerToken: string) {
     ["Visites", `/vendeur/${sellerToken}/visites`],
     ["Documents", `/vendeur/${sellerToken}/documents`],
   ];
+}
+
+function isPaymentValidated(state: V2State, agencyId: string) {
+  return state.subscriptions.some(
+    (subscription) =>
+      subscription.agencyId === agencyId && subscription.status === "active",
+  );
 }
 
 async function resolveCurrentAccess(accessToken: string): Promise<AccessResult> {
