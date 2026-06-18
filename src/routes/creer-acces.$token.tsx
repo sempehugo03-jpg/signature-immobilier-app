@@ -10,7 +10,7 @@ import {
 } from "@/components/agency-saas-ui";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { type InviteAccessLookup } from "@/lib/agency-saas";
+import { type AccessToken, type InviteAccessLookup } from "@/lib/agency-saas";
 import {
   completeLoadedInviteAccess,
   loadInviteAccess,
@@ -25,9 +25,13 @@ import {
   loadV2State,
   saveV2State,
   type V2AccessInvitation,
+  type V2UserAccess,
 } from "@/lib/v2/core";
 
 const LOCAL_ACCESS_SESSION_KEY = "signature_v2_access_email";
+const LOCAL_ACCESS_ROLE_KEY = "signature_v2_access_role";
+const LOCAL_ACCESS_AGENCY_SLUG_KEY = "signature_v2_access_agency_slug";
+const LOCAL_ACCESS_SELLER_TOKEN_KEY = "signature_v2_access_seller_token";
 
 type LocalInviteLookup =
   | {
@@ -130,10 +134,7 @@ function CreateAccessRoute() {
         return;
       }
       saveV2State(result.state);
-      window.sessionStorage.setItem(
-        LOCAL_ACCESS_SESSION_KEY,
-        result.access.email,
-      );
+      saveAcceptedAccessSession(result.access);
       setRedirectPath(result.destination);
       setError("");
       window.setTimeout(() => {
@@ -165,6 +166,9 @@ function CreateAccessRoute() {
 
     const nextRedirectPath =
       "redirectPath" in result ? (result.redirectPath ?? "/") : "/";
+    if (result.status === "valid" && result.access) {
+      saveSharedInviteAccessSession(result.access);
+    }
     setRedirectPath(nextRedirectPath);
     setError("");
     window.setTimeout(() => {
@@ -345,6 +349,67 @@ function getLocalInviteDescription(
   }
 
   return "Vous allez creer votre mot de passe pour acceder au suivi de votre bien.";
+}
+
+function saveAcceptedAccessSession(access: V2UserAccess) {
+  window.sessionStorage.setItem(LOCAL_ACCESS_SESSION_KEY, access.email);
+  window.sessionStorage.setItem(LOCAL_ACCESS_ROLE_KEY, access.role);
+
+  if (access.agencySlug) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_AGENCY_SLUG_KEY,
+      access.agencySlug,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_AGENCY_SLUG_KEY);
+  }
+
+  if (access.sellerToken) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_SELLER_TOKEN_KEY,
+      access.sellerToken,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_SELLER_TOKEN_KEY);
+  }
+}
+
+function saveSharedInviteAccessSession(access: AccessToken) {
+  if (access.email) {
+    window.sessionStorage.setItem(LOCAL_ACCESS_SESSION_KEY, access.email);
+  }
+  window.sessionStorage.setItem(
+    LOCAL_ACCESS_ROLE_KEY,
+    getSharedInviteRole(access),
+  );
+
+  if (access.agencySlug) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_AGENCY_SLUG_KEY,
+      access.agencySlug,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_AGENCY_SLUG_KEY);
+  }
+
+  if (access.sellerToken) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_SELLER_TOKEN_KEY,
+      access.sellerToken,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_SELLER_TOKEN_KEY);
+  }
+}
+
+function getSharedInviteRole(access: AccessToken) {
+  if (access.type === "manager" || access.type === "manager_invite") {
+    return "manager";
+  }
+  if (access.type === "agent" || access.type === "agent_invite") {
+    return "agent";
+  }
+  return "seller";
 }
 
 function getInviteEmail(
