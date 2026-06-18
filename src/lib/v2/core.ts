@@ -124,6 +124,9 @@ export type V2AccessInvitation = {
   agencyId: string;
   agencySlug: string;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   teamMemberId?: string;
   propertyId?: string;
   sellerToken?: string;
@@ -134,6 +137,13 @@ export type V2AccessInvitation = {
   createdAt: string;
   acceptedAt?: string;
   expiresAt?: string;
+};
+
+export type PreparedInviteEmail = {
+  to: string;
+  subject: string;
+  body: string;
+  inviteUrl: string;
 };
 
 export type V2UserAccess = {
@@ -462,12 +472,23 @@ export function getInvitationByToken(state: V2State, token: string) {
   );
 }
 
+export function getInviteByToken(state: V2State, token: string) {
+  return getInvitationByToken(state, token);
+}
+
 export function getInvitationDestination(invitation: V2AccessInvitation) {
   if (invitation.role === "seller") {
     return invitation.sellerToken ? `/vendeur/${invitation.sellerToken}` : "";
   }
 
   return invitation.agencySlug ? `/agence/${invitation.agencySlug}` : "";
+}
+
+export function getAccessDestination(
+  access: V2UserAccess | V2AccessInvitation,
+) {
+  if ("passwordMarker" in access) return getUserAccessDestination(access);
+  return getInvitationDestination(access);
 }
 
 export function isInvitationExpired(invitation: V2AccessInvitation) {
@@ -560,6 +581,39 @@ export function acceptInvitation(
           : seller,
       ),
     },
+  };
+}
+
+export function acceptInvite(state: V2State, token: string, password: string) {
+  return acceptInvitation(state, token, password);
+}
+
+export function prepareInviteEmail(
+  invite: V2AccessInvitation,
+  baseUrl = "",
+): PreparedInviteEmail {
+  // Brancher ici Resend, SendGrid ou une Edge Function Supabase quand l'envoi reel sera configure.
+  const inviteUrl = `${baseUrl}${invite.inviteUrl}`;
+  const roleLabel =
+    invite.role === "manager"
+      ? "patron / manager"
+      : invite.role === "agent"
+        ? "agent"
+        : "vendeur";
+
+  return {
+    to: invite.email,
+    subject: "Invitation Signature Immobilier",
+    inviteUrl,
+    body: [
+      "Bonjour,",
+      "",
+      `Vous etes invite a creer votre acces ${roleLabel} sur Signature Immobilier.`,
+      `Lien d'invitation : ${inviteUrl}`,
+      `Destination apres creation : ${invite.destination}`,
+      "",
+      "Ce lien vous permet de definir votre mot de passe et d'ouvrir le bon espace.",
+    ].join("\n"),
   };
 }
 
@@ -860,6 +914,9 @@ export function createSellerAccess(
     role: "seller",
     agency,
     email: input.email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    phone: input.phone,
     propertyId: property.id,
     sellerToken,
   });
@@ -892,6 +949,15 @@ export function createSellerAccess(
   };
 }
 
+export function createSellerInvite(
+  state: V2State,
+  agency: Agency,
+  property: Property,
+  input: Pick<SellerProfile, "firstName" | "lastName" | "email" | "phone">,
+) {
+  return createSellerAccess(state, agency, property, input);
+}
+
 export function createTeamInvite(
   state: V2State,
   agencyId: string,
@@ -909,6 +975,9 @@ export function createTeamInvite(
     role: input.role,
     agency,
     email: input.email,
+    firstName: input.firstName,
+    lastName: input.lastName,
+    phone: input.phone,
     teamMemberId: member.id,
   });
   return {
@@ -916,6 +985,22 @@ export function createTeamInvite(
     teamMembers: [member, ...state.teamMembers],
     accessInvitations: [invitation, ...state.accessInvitations],
   };
+}
+
+export function createManagerInvite(
+  state: V2State,
+  agencyId: string,
+  input: Omit<TeamMember, "id" | "agencyId" | "status" | "role">,
+) {
+  return createTeamInvite(state, agencyId, { ...input, role: "manager" });
+}
+
+export function createAgentInvite(
+  state: V2State,
+  agencyId: string,
+  input: Omit<TeamMember, "id" | "agencyId" | "status" | "role">,
+) {
+  return createTeamInvite(state, agencyId, { ...input, role: "agent" });
 }
 
 export function createPreviewProject(
@@ -1939,6 +2024,9 @@ function createAccessInvitation({
   role,
   agency,
   email,
+  firstName,
+  lastName,
+  phone,
   teamMemberId,
   propertyId,
   sellerToken,
@@ -1946,11 +2034,24 @@ function createAccessInvitation({
   role: "manager" | "agent" | "seller";
   agency: Agency;
   email: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
   teamMemberId?: string;
   propertyId?: string;
   sellerToken?: string;
 }): V2AccessInvitation {
   const token = makeId("invite");
+  if (!agency.slug) {
+    throw new Error("Impossible de creer l'invitation : slug agence manquant.");
+  }
+  if (role === "seller" && !sellerToken) {
+    throw new Error(
+      "Impossible de creer l'invitation vendeur : sellerToken manquant.",
+    );
+  }
+  const destination =
+    role === "seller" ? `/vendeur/${sellerToken}` : `/agence/${agency.slug}`;
   const invitation: V2AccessInvitation = {
     id: makeId("access_invite"),
     token,
@@ -1958,15 +2059,15 @@ function createAccessInvitation({
     agencyId: agency.id,
     agencySlug: agency.slug,
     email: normalizeEmail(email),
+    firstName,
+    lastName,
+    phone,
     teamMemberId,
     propertyId,
     sellerToken,
     status: "pending",
     inviteUrl: `/creer-acces/${token}`,
-    destination:
-      role === "seller" && sellerToken
-        ? `/vendeur/${sellerToken}`
-        : `/agence/${agency.slug}`,
+    destination,
     emailStatus: "prepared",
     createdAt: nowIso(),
   };

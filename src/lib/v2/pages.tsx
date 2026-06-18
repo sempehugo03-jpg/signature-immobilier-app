@@ -30,10 +30,11 @@ import {
   calculateIndicativeEstimate,
   createCallbackRequest,
   createEstimationRequest,
+  createAgentInvite,
+  createManagerInvite,
   createPreviewProject,
   createProperty,
-  createSellerAccess,
-  createTeamInvite,
+  createSellerInvite,
   createVisitRequest,
   deleteAgencyDemo,
   deletePreviewDemo,
@@ -54,6 +55,7 @@ import {
   getUserAccessDestination,
   loadV2State,
   markPaymentValidated,
+  prepareInviteEmail,
   saleSteps,
   saveV2State,
   updateEstimationStatus,
@@ -881,7 +883,7 @@ export function AgencyPropertyManagePage({
     event.preventDefault();
     const form = new FormData(event.currentTarget);
     commit(
-      createSellerAccess(state, agency, property, {
+      createSellerInvite(state, agency, property, {
         firstName: readForm(form, "firstName"),
         lastName: readForm(form, "lastName"),
         email: readForm(form, "email"),
@@ -890,7 +892,7 @@ export function AgencyPropertyManagePage({
     );
     event.currentTarget.reset();
     setFeedback(
-      "Espace vendeur cree. Invitation preparee. Email reel a brancher.",
+      "Espace vendeur cree. Invitation creee. Email reel non configure : copiez le lien.",
     );
   }
 
@@ -1078,17 +1080,20 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
   function addAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const role = readForm(form, "role") as "manager" | "agent";
+    const input = {
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    };
     commit(
-      createTeamInvite(state, agency.id, {
-        role: readForm(form, "role") as "manager" | "agent",
-        firstName: readForm(form, "firstName"),
-        lastName: readForm(form, "lastName"),
-        email: readForm(form, "email"),
-        phone: readForm(form, "phone"),
-      }),
+      role === "manager"
+        ? createManagerInvite(state, agency.id, input)
+        : createAgentInvite(state, agency.id, input),
     );
     event.currentTarget.reset();
-    setFeedback("Invitation preparee. Email reel a brancher.");
+    setFeedback("Invitation creee. Email reel non configure : copiez le lien.");
   }
 
   return (
@@ -1312,8 +1317,7 @@ export function PreviewStudioDetailPage({ previewId }: { previewId: string }) {
     }
     const form = new FormData(event.currentTarget);
     commit(
-      createTeamInvite(state, agency.id, {
-        role: "manager",
+      createManagerInvite(state, agency.id, {
         firstName: readForm(form, "firstName"),
         lastName: readForm(form, "lastName"),
         email: readForm(form, "email"),
@@ -1442,17 +1446,20 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
       return;
     }
     const form = new FormData(event.currentTarget);
+    const role = readForm(form, "role") as "manager" | "agent";
+    const input = {
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    };
     commit(
-      createTeamInvite(state, agency.id, {
-        role: readForm(form, "role") as "manager" | "agent",
-        firstName: readForm(form, "firstName"),
-        lastName: readForm(form, "lastName"),
-        email: readForm(form, "email"),
-        phone: readForm(form, "phone"),
-      }),
+      role === "manager"
+        ? createManagerInvite(state, agency.id, input)
+        : createAgentInvite(state, agency.id, input),
     );
     event.currentTarget.reset();
-    setManagerFeedback("Invitation preparee. Email reel a brancher.");
+    setManagerFeedback("Invitation creee. Email reel non configure : copiez le lien.");
   }
 
   return (
@@ -1651,7 +1658,7 @@ function AdminAccessInvitationsPanel({
   );
   return (
     <Panel className="p-5">
-      <h3 className="font-display text-3xl">Acces et invitations</h3>
+      <h3 className="font-display text-3xl">Invitations et accès</h3>
       {!paymentValidated && (
         <p className="mt-2 text-sm text-primary/55">
           Validez le paiement avant d'activer l'agence.
@@ -1724,6 +1731,7 @@ function InvitationSummary({
   sellerToken?: string;
 }) {
   const sellerPath = sellerToken ? `/vendeur/${sellerToken}` : "";
+  const preparedEmail = invitation ? prepareInviteEmail(invitation) : null;
   return (
     <div className="mt-3 rounded-2xl bg-[#faf7f0] p-4 text-sm">
       <div className="flex flex-wrap items-center gap-2">
@@ -1737,6 +1745,12 @@ function InvitationSummary({
       )}
       {invitation ? (
         <>
+          <p className="mt-2 text-primary/65">
+            Invitation créée pour {invitation.email}
+            {invitation.firstName || invitation.lastName
+              ? ` (${[invitation.firstName, invitation.lastName].filter(Boolean).join(" ")})`
+              : ""}
+          </p>
           <p className="mt-2 break-all text-primary/65">
             Lien d'invitation : {invitation.inviteUrl}
           </p>
@@ -1744,7 +1758,15 @@ function InvitationSummary({
             Destination prevue : {invitation.destination}
           </p>
           <p className="mt-1 text-primary/55">
-            Invitation preparee. Email reel a brancher.
+            Email réel non configuré. Copiez ce lien d'invitation et envoyez-le manuellement.
+          </p>
+          {preparedEmail && (
+            <p className="mt-1 text-primary/45">
+              Email préparé : {preparedEmail.subject}
+            </p>
+          )}
+          <p className="mt-1 text-primary/45">
+            Statut email : préparation uniquement, aucun envoi automatique.
           </p>
           <div className="mt-3 flex flex-wrap gap-2">
             <Button
