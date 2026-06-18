@@ -18,9 +18,9 @@ import {
   type LoadedInviteAccess,
 } from "@/lib/shared-invites";
 import {
-  acceptInvitation,
+  acceptInvite,
   getAgencyById,
-  getInvitationByToken,
+  getInviteByToken,
   isInvitationExpired,
   loadV2State,
   saveV2State,
@@ -124,7 +124,7 @@ function CreateAccessRoute() {
     }
 
     if (localLookup?.status === "valid") {
-      const result = acceptInvitation(loadV2State(), token, password);
+      const result = acceptInvite(loadV2State(), token, password);
       if (!result.ok) {
         setError(result.message);
         return;
@@ -294,7 +294,7 @@ function getInviteDescription(
 
 function loadLocalV2Invite(token: string): LocalInviteLookup {
   const state = loadV2State();
-  const invitation = getInvitationByToken(state, token);
+  const invitation = getInviteByToken(state, token);
   if (!invitation) {
     return {
       status: "invalid",
