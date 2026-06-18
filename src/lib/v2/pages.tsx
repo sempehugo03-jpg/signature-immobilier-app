@@ -43,6 +43,7 @@ import {
   formatDate,
   formatPrice,
   generatePreviewDemo,
+  getAccessDestinationError,
   getAgencyById,
   getAgencyBySlug,
   getAgencyProperties,
@@ -51,6 +52,7 @@ import {
   getPropertyById,
   getPropertyBySlug,
   getPublicProperties,
+  getSellerByToken,
   getSellerSpace,
   getUserAccessDestination,
   loadV2State,
@@ -68,11 +70,20 @@ import {
   type PublicBadge,
   type V2AccessInvitation,
   type V2State,
+  type V2UserAccess,
   type VisitRequest,
 } from "@/lib/v2/core";
 
+type AccessRoleSnapshot = "admin" | "manager" | "agent" | "seller";
+type CurrentAccessSnapshot = {
+  email?: string;
+  role?: AccessRoleSnapshot;
+  agencySlug?: string;
+  sellerToken?: string;
+};
+
 type AccessResult =
-  | { ok: true; destination: string }
+  | { ok: true; destination: string; access?: CurrentAccessSnapshot }
   | { ok: false; message: string };
 
 const badCredentialsMessage = "Email ou mot de passe incorrect.";
@@ -81,7 +92,9 @@ const unknownLoginMessage =
 const noAccessMessage =
   "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.";
 const LOCAL_ACCESS_SESSION_KEY = "signature_v2_access_email";
-
+const LOCAL_ACCESS_ROLE_KEY = "signature_v2_access_role";
+const LOCAL_ACCESS_AGENCY_SLUG_KEY = "signature_v2_access_agency_slug";
+const LOCAL_ACCESS_SELLER_TOKEN_KEY = "signature_v2_access_seller_token";
 function useV2Store() {
   const [state, setState] = useState<V2State>(() => loadV2State());
   function commit(next: V2State) {
@@ -89,6 +102,106 @@ function useV2Store() {
     setState(next);
   }
   return { state, commit };
+}
+
+function saveLocalAccessSession(access: CurrentAccessSnapshot | V2UserAccess) {
+  if (typeof window === "undefined") return;
+  if (access.email) {
+    window.sessionStorage.setItem(LOCAL_ACCESS_SESSION_KEY, access.email);
+  }
+  if (access.role) {
+    window.sessionStorage.setItem(LOCAL_ACCESS_ROLE_KEY, access.role);
+  }
+  if (access.agencySlug) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_AGENCY_SLUG_KEY,
+      access.agencySlug,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_AGENCY_SLUG_KEY);
+  }
+  if (access.sellerToken) {
+    window.sessionStorage.setItem(
+      LOCAL_ACCESS_SELLER_TOKEN_KEY,
+      access.sellerToken,
+    );
+  } else {
+    window.sessionStorage.removeItem(LOCAL_ACCESS_SELLER_TOKEN_KEY);
+  }
+}
+
+function clearLocalAccessSession() {
+  if (typeof window === "undefined") return;
+  window.sessionStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
+  window.sessionStorage.removeItem(LOCAL_ACCESS_ROLE_KEY);
+  window.sessionStorage.removeItem(LOCAL_ACCESS_AGENCY_SLUG_KEY);
+  window.sessionStorage.removeItem(LOCAL_ACCESS_SELLER_TOKEN_KEY);
+  window.localStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
+  window.localStorage.removeItem(LOCAL_ACCESS_ROLE_KEY);
+  window.localStorage.removeItem(LOCAL_ACCESS_AGENCY_SLUG_KEY);
+  window.localStorage.removeItem(LOCAL_ACCESS_SELLER_TOKEN_KEY);
+}
+
+function readLocalAccessSnapshot(state?: V2State): CurrentAccessSnapshot | null {
+  if (typeof window === "undefined") return null;
+  const email =
+    window.sessionStorage.getItem(LOCAL_ACCESS_SESSION_KEY) ??
+    window.localStorage.getItem(LOCAL_ACCESS_SESSION_KEY) ??
+    "";
+  if (state && email) {
+    const access = findUserAccessByEmail(state, email);
+    if (access) return access;
+  }
+
+  const role = window.sessionStorage.getItem(LOCAL_ACCESS_ROLE_KEY);
+  const agencySlug = window.sessionStorage.getItem(
+    LOCAL_ACCESS_AGENCY_SLUG_KEY,
+  );
+  const sellerToken = window.sessionStorage.getItem(
+    LOCAL_ACCESS_SELLER_TOKEN_KEY,
+  );
+
+  if (!email && !role) return null;
+  return {
+    email,
+    role: isAccessRoleSnapshot(role) ? role : undefined,
+    agencySlug: agencySlug ?? undefined,
+    sellerToken: sellerToken ?? undefined,
+  };
+}
+
+function isAccessRoleSnapshot(value: string | null): value is AccessRoleSnapshot {
+  return (
+    value === "admin" ||
+    value === "manager" ||
+    value === "agent" ||
+    value === "seller"
+  );
+}
+
+function useCurrentAgencyRole(agencySlug: string) {
+  const [role, setRole] = useState<"manager" | "agent" | "seller">(() =>
+    getAgencyRoleFromSnapshot(readLocalAccessSnapshot(loadV2State()), agencySlug),
+  );
+
+  useEffect(() => {
+    setRole(
+      getAgencyRoleFromSnapshot(readLocalAccessSnapshot(loadV2State()), agencySlug),
+    );
+  }, [agencySlug]);
+
+  return role;
+}
+
+function getAgencyRoleFromSnapshot(
+  access: CurrentAccessSnapshot | null,
+  agencySlug: string,
+) {
+  if (access?.role === "seller") return "seller";
+  if (access?.role === "agent" && access.agencySlug === agencySlug) {
+    return "agent";
+  }
+  return "manager";
 }
 
 export function MonSuiviV2Page() {
@@ -123,9 +236,10 @@ export function MonSuiviV2Page() {
       }
       const destination = getUserAccessDestination(access);
       if (!destination) {
-        setError(noAccessMessage);
+        setError(getAccessDestinationError(access));
         return;
       }
+      saveLocalAccessSession(access);
       window.location.assign(destination);
       return;
     }
@@ -144,6 +258,7 @@ export function MonSuiviV2Page() {
       setError(result.message);
       return;
     }
+    if (result.access) saveLocalAccessSession(result.access);
     window.location.assign(result.destination);
   }
 
@@ -155,16 +270,11 @@ export function MonSuiviV2Page() {
     if (localAccess) {
       const destination = getUserAccessDestination(localAccess);
       if (!destination) {
-        setError(noAccessMessage);
+        setError(getAccessDestinationError(localAccess));
         setBusy(false);
         return;
       }
-      if (typeof window !== "undefined") {
-        window.sessionStorage.setItem(
-          LOCAL_ACCESS_SESSION_KEY,
-          localAccess.email,
-        );
-      }
+      saveLocalAccessSession(localAccess);
       setLocalAccessEmail(localAccess.email);
       setBusy(false);
       window.location.assign(destination);
@@ -185,10 +295,7 @@ export function MonSuiviV2Page() {
   async function onChangeAccount() {
     setBusy(true);
     await signOutEverywhere();
-    if (typeof window !== "undefined") {
-      window.sessionStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
-      window.localStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
-    }
+    clearLocalAccessSession();
     setLocalAccessEmail("");
     setEmail("");
     setPassword("");
@@ -566,8 +673,19 @@ export function PublicEstimationPage({ agencySlug }: { agencySlug: string }) {
 
 export function SellerHomePage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
+  const seller = getSellerByToken(state, sellerToken);
   const space = getSellerSpace(state, sellerToken);
-  if (!space) return <NotFound title="Lien vendeur invalide" />;
+  if (!space) {
+    return (
+      <NotFound
+        title={
+          seller
+            ? "Espace vendeur incomplet : aucun bien associé."
+            : "Lien vendeur invalide"
+        }
+      />
+    );
+  }
   return (
     <PrivateShell
       title="Espace vendeur"
@@ -601,8 +719,19 @@ export function SellerHomePage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerPropertyPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
+  const seller = getSellerByToken(state, sellerToken);
   const space = getSellerSpace(state, sellerToken);
-  if (!space) return <NotFound title="Lien vendeur invalide" />;
+  if (!space) {
+    return (
+      <NotFound
+        title={
+          seller
+            ? "Espace vendeur incomplet : aucun bien associé."
+            : "Lien vendeur invalide"
+        }
+      />
+    );
+  }
   return (
     <SellerHomePage sellerToken={sellerToken} />
   );
@@ -610,8 +739,19 @@ export function SellerPropertyPage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerVisitsPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
+  const seller = getSellerByToken(state, sellerToken);
   const space = getSellerSpace(state, sellerToken);
-  if (!space) return <NotFound title="Lien vendeur invalide" />;
+  if (!space) {
+    return (
+      <NotFound
+        title={
+          seller
+            ? "Espace vendeur incomplet : aucun bien associé."
+            : "Lien vendeur invalide"
+        }
+      />
+    );
+  }
   return (
     <PrivateShell title="Visites vendeur" links={sellerLinks(sellerToken)}>
       <Header title="Visites et comptes rendus" text="Le vendeur lit uniquement ce qui est visible pour lui." />
@@ -635,8 +775,19 @@ export function SellerVisitsPage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerDocumentsPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
+  const seller = getSellerByToken(state, sellerToken);
   const space = getSellerSpace(state, sellerToken);
-  if (!space) return <NotFound title="Lien vendeur invalide" />;
+  if (!space) {
+    return (
+      <NotFound
+        title={
+          seller
+            ? "Espace vendeur incomplet : aucun bien associé."
+            : "Lien vendeur invalide"
+        }
+      />
+    );
+  }
   return (
     <PrivateShell title="Documents vendeur" links={sellerLinks(sellerToken)}>
       <Header title="Documents visibles" text="Uniquement les documents publies par l'agence." />
@@ -664,20 +815,28 @@ export function SellerDocumentsPage({ sellerToken }: { sellerToken: string }) {
 export function AgencyDashboardPage({ agencySlug }: { agencySlug: string }) {
   const { state } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
+  const role = useCurrentAgencyRole(agency?.slug ?? agencySlug);
+  const isAgent = role === "agent";
   if (!agency) return <NotFound title="Agence introuvable" />;
   const properties = getAgencyProperties(state, agency.id);
   return (
     <AgencyShell agency={agency}>
       <Header
-        title="Dashboard agence"
-        text="Tous les biens, demandes entrantes, visites et actions visibles par les clients."
+        title={isAgent ? "Espace agent" : "Dashboard agence"}
+        text={
+          isAgent
+            ? "Vue limitee aux biens, visites, demandes et comptes rendus utiles a l'agent."
+            : "Tous les biens, demandes entrantes, visites et actions visibles par les clients."
+        }
       >
-        <Button asChild className="rounded-full">
-          <Link to="/agence/$slug/biens/nouveau" params={{ slug: agencySlug }}>
-            <Plus className="h-4 w-4" />
-            Creer une annonce
-          </Link>
-        </Button>
+        {!isAgent && (
+          <Button asChild className="rounded-full">
+            <Link to="/agence/$slug/biens/nouveau" params={{ slug: agencySlug }}>
+              <Plus className="h-4 w-4" />
+              Creer une annonce
+            </Link>
+          </Button>
+        )}
       </Header>
       <Section>
         <Stats
@@ -720,7 +879,18 @@ export function AgencyNewPropertyPage({ agencySlug }: { agencySlug: string }) {
   const { state, commit } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
   const [feedback, setFeedback] = useState("");
+  const role = useCurrentAgencyRole(agency?.slug ?? agencySlug);
   if (!agency) return <NotFound title="Agence introuvable" />;
+  if (role === "agent") {
+    return (
+      <AgencyShell agency={agency}>
+        <RoleLimitedPanel
+          title="Creation d'annonce reservee"
+          text="Votre acces agent permet de suivre et gerer les biens existants, les visites et les comptes rendus. La creation d'annonce reste reservee au patron / manager."
+        />
+      </AgencyShell>
+    );
+  }
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -995,7 +1165,18 @@ export function AgencyPropertyManagePage({
 export function AgencySellersPage({ agencySlug }: { agencySlug: string }) {
   const { state } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
+  const role = useCurrentAgencyRole(agency?.slug ?? agencySlug);
   if (!agency) return <NotFound title="Agence introuvable" />;
+  if (role === "agent") {
+    return (
+      <AgencyShell agency={agency}>
+        <RoleLimitedPanel
+          title="Vendeurs reserves au patron"
+          text="Votre acces agent reste concentre sur les biens, les visites et les comptes rendus."
+        />
+      </AgencyShell>
+    );
+  }
   return (
     <AgencyShell agency={agency}>
       <Header title="Vendeurs" text="Acces vendeurs associes aux biens." />
@@ -1075,7 +1256,18 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
   const { state, commit } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
   const [feedback, setFeedback] = useState("");
+  const role = useCurrentAgencyRole(agency?.slug ?? agencySlug);
   if (!agency) return <NotFound title="Agence introuvable" />;
+  if (role === "agent") {
+    return (
+      <AgencyShell agency={agency}>
+        <RoleLimitedPanel
+          title="Equipe reservee au patron"
+          text="Votre acces agent ne permet pas d'ajouter un patron, un manager ou un autre agent."
+        />
+      </AgencyShell>
+    );
+  }
 
   function addAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -1795,6 +1987,59 @@ function getInvitationRoleLabel(role: V2AccessInvitation["role"]) {
   return "Vendeur";
 }
 
+function RoleLimitedPanel({ title, text }: { title: string; text: string }) {
+  return (
+    <Section>
+      <Panel className="p-6">
+        <Badge variant="secondary">Acces agent</Badge>
+        <h1 className="mt-3 font-display text-4xl">{title}</h1>
+        <p className="mt-3 max-w-2xl text-sm leading-relaxed text-primary/60">
+          {text}
+        </p>
+      </Panel>
+    </Section>
+  );
+}
+
+function SellerAgencyAccessBlock() {
+  const [sellerToken, setSellerToken] = useState("");
+
+  useEffect(() => {
+    const access = readLocalAccessSnapshot(loadV2State());
+    const token = access?.sellerToken ?? "";
+    setSellerToken(token);
+    if (token) {
+      window.setTimeout(() => {
+        window.location.assign(`/vendeur/${token}`);
+      }, 300);
+    }
+  }, []);
+
+  return (
+    <Shell>
+      <main className="mx-auto max-w-3xl px-5 py-16 md:px-8">
+        <Panel className="p-6">
+          <Badge variant="secondary">Espace vendeur</Badge>
+          <h1 className="mt-3 font-display text-4xl">
+            Votre acces vendeur ouvre un espace dedie.
+          </h1>
+          <p className="mt-3 text-sm leading-relaxed text-primary/60">
+            Vous allez etre redirige vers votre suivi vendeur. L'espace agence
+            reste reserve au patron et aux agents.
+          </p>
+          {sellerToken && (
+            <Button asChild className="mt-5 rounded-full">
+              <Link to="/vendeur/$sellerToken" params={{ sellerToken }}>
+                Ouvrir mon espace vendeur
+              </Link>
+            </Button>
+          )}
+        </Panel>
+      </main>
+    </Shell>
+  );
+}
+
 function DemoAccessPanel({
   agency,
   sellerToken,
@@ -1882,18 +2127,33 @@ function Shell({ agency, children }: { agency?: Agency; children: ReactNode }) {
 }
 
 function AgencyShell({ agency, children }: { agency: Agency; children: ReactNode }) {
+  const role = useCurrentAgencyRole(agency.slug);
+  if (role === "seller") {
+    return <SellerAgencyAccessBlock />;
+  }
+
+  const links =
+    role === "agent"
+      ? [
+          ["Dashboard", `/agence/${agency.slug}`],
+          ["Biens", `/agence/${agency.slug}/biens`],
+          ["Estimations", `/agence/${agency.slug}/estimations`],
+          ["Visites", `/agence/${agency.slug}/demandes-visites`],
+        ]
+      : [
+          ["Dashboard", `/agence/${agency.slug}`],
+          ["Biens", `/agence/${agency.slug}/biens`],
+          ["Vendeurs", `/agence/${agency.slug}/vendeurs`],
+          ["Estimations", `/agence/${agency.slug}/estimations`],
+          ["Visites", `/agence/${agency.slug}/demandes-visites`],
+          ["Agents", `/agence/${agency.slug}/agents`],
+        ];
+
   return (
     <PrivateShell
-      title={agency.name}
+      title={role === "agent" ? `${agency.name} - Agent` : agency.name}
       useBrowserNavigation
-      links={[
-        ["Dashboard", `/agence/${agency.slug}`],
-        ["Biens", `/agence/${agency.slug}/biens`],
-        ["Vendeurs", `/agence/${agency.slug}/vendeurs`],
-        ["Estimations", `/agence/${agency.slug}/estimations`],
-        ["Visites", `/agence/${agency.slug}/demandes-visites`],
-        ["Agents", `/agence/${agency.slug}/agents`],
-      ]}
+      links={links}
     >
       {children}
     </PrivateShell>
@@ -2229,7 +2489,11 @@ async function resolveCurrentAccess(accessToken: string): Promise<AccessResult> 
       "destination" in body &&
       typeof body.destination === "string"
     ) {
-      return { ok: true, destination: body.destination };
+      return {
+        ok: true,
+        destination: body.destination,
+        access: readAccessSnapshotFromApiBody(body),
+      };
     }
     if (body && typeof body === "object" && "code" in body && body.code === "no_access") {
       return { ok: false, message: noAccessMessage };
@@ -2250,6 +2514,22 @@ function copyText(value: string) {
   if (typeof navigator !== "undefined" && navigator.clipboard) {
     void navigator.clipboard.writeText(value);
   }
+}
+
+function readAccessSnapshotFromApiBody(body: object): CurrentAccessSnapshot | undefined {
+  if (!("access" in body) || !body.access || typeof body.access !== "object") {
+    return undefined;
+  }
+  const access = body.access as Record<string, unknown>;
+  const role = typeof access.role === "string" ? access.role : null;
+  return {
+    email: typeof access.email === "string" ? access.email : undefined,
+    role: isAccessRoleSnapshot(role) ? role : undefined,
+    agencySlug:
+      typeof access.agencySlug === "string" ? access.agencySlug : undefined,
+    sellerToken:
+      typeof access.sellerToken === "string" ? access.sellerToken : undefined,
+  };
 }
 
 function readForm(form: FormData, key: string) {

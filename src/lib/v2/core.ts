@@ -491,6 +491,23 @@ export function getAccessDestination(
   return getInvitationDestination(access);
 }
 
+export function getAccessDestinationError(
+  access: V2UserAccess | V2AccessInvitation,
+) {
+  if (access.role === "seller" && !access.sellerToken) {
+    return "Accès vendeur incomplet : sellerToken manquant.";
+  }
+
+  if (
+    (access.role === "manager" || access.role === "agent") &&
+    !access.agencySlug
+  ) {
+    return "Accès agence incomplet : agencySlug manquant.";
+  }
+
+  return "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.";
+}
+
 export function isInvitationExpired(invitation: V2AccessInvitation) {
   return (
     invitation.status === "expired" ||
@@ -524,8 +541,7 @@ export function acceptInvitation(
     return {
       ok: false as const,
       state,
-      message:
-        "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.",
+      message: getAccessDestinationError(invitation),
     };
   }
 
@@ -629,8 +645,7 @@ export function findUserAccessByCredentials(
       (access) =>
         access.isActive &&
         access.email === normalizedEmail &&
-        access.passwordMarker === marker &&
-        Boolean(getUserAccessDestination(access)),
+        access.passwordMarker === marker,
     ) ?? null
   );
 }
@@ -640,9 +655,7 @@ export function findUserAccessByEmail(state: V2State, email: string) {
   return (
     state.userAccesses.find(
       (access) =>
-        access.isActive &&
-        access.email === normalizedEmail &&
-        Boolean(getUserAccessDestination(access)),
+        access.isActive && access.email === normalizedEmail,
     ) ?? null
   );
 }
@@ -658,6 +671,9 @@ export function getUserAccessDestination(access: V2UserAccess) {
   if (access.role === "seller" && access.sellerToken) {
     return `/vendeur/${access.sellerToken}`;
   }
+
+  if (access.role === "seller") return "";
+  if (access.role === "manager" || access.role === "agent") return "";
   return access.destination || "";
 }
 
