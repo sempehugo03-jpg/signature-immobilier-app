@@ -117,6 +117,41 @@ export type SellerProfile = {
   inviteUrl?: string;
 };
 
+export type V2AccessInvitation = {
+  id: string;
+  token: string;
+  role: "manager" | "agent" | "seller";
+  agencyId: string;
+  agencySlug: string;
+  email: string;
+  teamMemberId?: string;
+  propertyId?: string;
+  sellerToken?: string;
+  status: "pending" | "accepted" | "expired";
+  inviteUrl: string;
+  destination: string;
+  emailStatus: "prepared";
+  createdAt: string;
+  acceptedAt?: string;
+  expiresAt?: string;
+};
+
+export type V2UserAccess = {
+  id: string;
+  email: string;
+  role: AccessRole;
+  agencyId?: string;
+  agencySlug?: string;
+  teamMemberId?: string;
+  propertyId?: string;
+  sellerToken?: string;
+  destination: string;
+  passwordMarker: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
 export type PropertyVisit = {
   id: string;
   agencyId: string;
@@ -295,6 +330,8 @@ export type V2State = {
   previewProjects: PreviewProject[];
   plans: Plan[];
   subscriptions: Subscription[];
+  accessInvitations: V2AccessInvitation[];
+  userAccesses: V2UserAccess[];
 };
 
 export type EstimateInput = {
@@ -415,6 +452,159 @@ export function getSellerSpace(state: V2State, sellerToken: string) {
         document.propertyId === property.id && document.visibleToSeller,
     ),
   };
+}
+
+export function getInvitationByToken(state: V2State, token: string) {
+  return (
+    state.accessInvitations.find(
+      (invitation) => invitation.token === token.trim(),
+    ) ?? null
+  );
+}
+
+export function getInvitationDestination(invitation: V2AccessInvitation) {
+  if (invitation.role === "seller") {
+    return invitation.sellerToken ? `/vendeur/${invitation.sellerToken}` : "";
+  }
+
+  return invitation.agencySlug ? `/agence/${invitation.agencySlug}` : "";
+}
+
+export function isInvitationExpired(invitation: V2AccessInvitation) {
+  return (
+    invitation.status === "expired" ||
+    Boolean(
+      invitation.expiresAt &&
+        new Date(invitation.expiresAt).getTime() < Date.now(),
+    )
+  );
+}
+
+export function acceptInvitation(
+  state: V2State,
+  token: string,
+  password: string,
+) {
+  const invitation = getInvitationByToken(state, token);
+  if (
+    !invitation ||
+    invitation.status !== "pending" ||
+    isInvitationExpired(invitation)
+  ) {
+    return {
+      ok: false as const,
+      state,
+      message: "Lien invalide ou expire.",
+    };
+  }
+
+  const destination = getInvitationDestination(invitation);
+  if (!destination) {
+    return {
+      ok: false as const,
+      state,
+      message:
+        "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.",
+    };
+  }
+
+  const now = nowIso();
+  const access: V2UserAccess = {
+    id: makeId("access"),
+    email: normalizeEmail(invitation.email),
+    role: invitation.role,
+    agencyId: invitation.agencyId,
+    agencySlug: invitation.agencySlug,
+    teamMemberId: invitation.teamMemberId,
+    propertyId: invitation.propertyId,
+    sellerToken: invitation.sellerToken,
+    destination,
+    passwordMarker: createPilotPasswordMarker(password),
+    isActive: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return {
+    ok: true as const,
+    destination,
+    access,
+    invitation: { ...invitation, status: "accepted" as const, acceptedAt: now },
+    state: {
+      ...state,
+      accessInvitations: state.accessInvitations.map((item) =>
+        item.id === invitation.id
+          ? { ...item, status: "accepted", acceptedAt: now, destination }
+          : item,
+      ),
+      userAccesses: [
+        access,
+        ...state.userAccesses.filter(
+          (item) =>
+            !(
+              item.email === access.email &&
+              item.role === access.role &&
+              item.agencyId === access.agencyId &&
+              (access.sellerToken ? item.sellerToken === access.sellerToken : true)
+            ),
+        ),
+      ],
+      teamMembers: state.teamMembers.map((member) =>
+        invitation.teamMemberId && member.id === invitation.teamMemberId
+          ? { ...member, status: "active" }
+          : member,
+      ),
+      sellers: state.sellers.map((seller) =>
+        invitation.sellerToken && seller.sellerToken === invitation.sellerToken
+          ? { ...seller, status: "active" }
+          : seller,
+      ),
+    },
+  };
+}
+
+export function findUserAccessByCredentials(
+  state: V2State,
+  email: string,
+  password: string,
+) {
+  const normalizedEmail = normalizeEmail(email);
+  const marker = createPilotPasswordMarker(password);
+  return (
+    state.userAccesses.find(
+      (access) =>
+        access.isActive &&
+        access.email === normalizedEmail &&
+        access.passwordMarker === marker &&
+        Boolean(getUserAccessDestination(access)),
+    ) ?? null
+  );
+}
+
+export function findUserAccessByEmail(state: V2State, email: string) {
+  const normalizedEmail = normalizeEmail(email);
+  return (
+    state.userAccesses.find(
+      (access) =>
+        access.isActive &&
+        access.email === normalizedEmail &&
+        Boolean(getUserAccessDestination(access)),
+    ) ?? null
+  );
+}
+
+export function getUserAccessDestination(access: V2UserAccess) {
+  if (access.role === "admin") return "/admin";
+  if (
+    (access.role === "manager" || access.role === "agent") &&
+    access.agencySlug
+  ) {
+    return `/agence/${access.agencySlug}`;
+  }
+  if (access.role === "seller" && access.sellerToken) {
+    return `/vendeur/${access.sellerToken}`;
+  }
+  return access.destination || "";
 }
 
 export function getMainPhoto(property: Property) {
@@ -666,6 +856,13 @@ export function createSellerAccess(
   input: Pick<SellerProfile, "firstName" | "lastName" | "email" | "phone">,
 ) {
   const sellerToken = `seller_${cryptoSafeId()}`;
+  const invitation = createAccessInvitation({
+    role: "seller",
+    agency,
+    email: input.email,
+    propertyId: property.id,
+    sellerToken,
+  });
   const seller: SellerProfile = {
     id: makeId("seller"),
     agencyId: agency.id,
@@ -673,11 +870,18 @@ export function createSellerAccess(
     sellerToken,
     ...input,
     status: "invited",
-    inviteUrl: `/creer-acces/${makeId("invite")}`,
+    inviteUrl: invitation.inviteUrl,
   };
 
   return {
     ...state,
+    accessInvitations: [
+      invitation,
+      ...state.accessInvitations.filter(
+        (item) =>
+          !(item.role === "seller" && item.propertyId === property.id),
+      ),
+    ],
     sellers: [
       seller,
       ...state.sellers.filter((item) => item.propertyId !== property.id),
@@ -693,13 +897,25 @@ export function createTeamInvite(
   agencyId: string,
   input: Omit<TeamMember, "id" | "agencyId" | "status">,
 ) {
+  const agency = getAgencyById(state, agencyId);
+  if (!agency) return state;
   const member: TeamMember = {
     id: makeId("member"),
     agencyId,
     ...input,
     status: "invited",
   };
-  return { ...state, teamMembers: [member, ...state.teamMembers] };
+  const invitation = createAccessInvitation({
+    role: input.role,
+    agency,
+    email: input.email,
+    teamMemberId: member.id,
+  });
+  return {
+    ...state,
+    teamMembers: [member, ...state.teamMembers],
+    accessInvitations: [invitation, ...state.accessInvitations],
+  };
 }
 
 export function createPreviewProject(
@@ -1392,6 +1608,9 @@ function mergeState(partial: Partial<V2State>): V2State {
     previewProjects: partial.previewProjects ?? initial.previewProjects,
     plans: partial.plans ?? initial.plans,
     subscriptions: partial.subscriptions ?? initial.subscriptions,
+    accessInvitations:
+      partial.accessInvitations ?? initial.accessInvitations,
+    userAccesses: partial.userAccesses ?? initial.userAccesses,
   };
 }
 
@@ -1662,6 +1881,8 @@ function createInitialV2State(): V2State {
         stripePaymentUrl: "https://buy.stripe.com/test_signature_demo",
       },
     ],
+    accessInvitations: [],
+    userAccesses: [],
   };
 }
 
@@ -1712,6 +1933,57 @@ function filesToPhotos(propertyId: string, files?: FileList | null) {
       isMain: index === 0,
       order: index,
     }));
+}
+
+function createAccessInvitation({
+  role,
+  agency,
+  email,
+  teamMemberId,
+  propertyId,
+  sellerToken,
+}: {
+  role: "manager" | "agent" | "seller";
+  agency: Agency;
+  email: string;
+  teamMemberId?: string;
+  propertyId?: string;
+  sellerToken?: string;
+}): V2AccessInvitation {
+  const token = makeId("invite");
+  const invitation: V2AccessInvitation = {
+    id: makeId("access_invite"),
+    token,
+    role,
+    agencyId: agency.id,
+    agencySlug: agency.slug,
+    email: normalizeEmail(email),
+    teamMemberId,
+    propertyId,
+    sellerToken,
+    status: "pending",
+    inviteUrl: `/creer-acces/${token}`,
+    destination:
+      role === "seller" && sellerToken
+        ? `/vendeur/${sellerToken}`
+        : `/agence/${agency.slug}`,
+    emailStatus: "prepared",
+    createdAt: nowIso(),
+  };
+
+  return invitation;
+}
+
+function normalizeEmail(email: string) {
+  return email.trim().toLowerCase();
+}
+
+function createPilotPasswordMarker(password: string) {
+  let hash = 0;
+  for (const char of password) {
+    hash = (hash * 31 + char.charCodeAt(0)) | 0;
+  }
+  return `pilot:${Math.abs(hash).toString(36)}`;
 }
 
 function makeId(prefix: string) {

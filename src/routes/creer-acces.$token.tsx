@@ -17,6 +17,31 @@ import {
   type CompletedInviteAccessLookup,
   type LoadedInviteAccess,
 } from "@/lib/shared-invites";
+import {
+  acceptInvitation,
+  getAgencyById,
+  getInvitationByToken,
+  isInvitationExpired,
+  loadV2State,
+  saveV2State,
+  type V2AccessInvitation,
+} from "@/lib/v2/core";
+
+const LOCAL_ACCESS_SESSION_KEY = "signature_v2_access_email";
+
+type LocalInviteLookup =
+  | {
+      status: "valid";
+      invitation: V2AccessInvitation;
+      agencyName: string;
+      email: string;
+      description: string;
+    }
+  | {
+      status: "invalid" | "used" | "expired";
+      title: string;
+      message: string;
+    };
 
 export const Route = createFileRoute("/creer-acces/$token")({
   head: () => ({
@@ -28,6 +53,9 @@ export const Route = createFileRoute("/creer-acces/$token")({
 function CreateAccessRoute() {
   const { token } = Route.useParams();
   const [lookup, setLookup] = useState<InviteAccessLookup | null>(null);
+  const [localLookup, setLocalLookup] = useState<LocalInviteLookup | null>(
+    null,
+  );
   const [loadedInvite, setLoadedInvite] = useState<LoadedInviteAccess | null>(
     null,
   );
@@ -43,18 +71,29 @@ function CreateAccessRoute() {
     setLoaded(false);
     setLoadedInvite(null);
     setLookup(null);
+    setLocalLookup(null);
     setError("");
     setRedirectPath("");
 
     loadInviteAccess(token)
       .then((result) => {
         if (cancelled) return;
+        const local = loadLocalV2Invite(token);
+        if (local.status !== "invalid" && result.lookup.status !== "valid") {
+          setLocalLookup(local);
+          return;
+        }
         setLoadedInvite(result);
         setLookup(result.lookup);
       })
       .catch((error) => {
         console.info("Invitation non lue", error);
         if (!cancelled) {
+          const local = loadLocalV2Invite(token);
+          if (local.status !== "invalid") {
+            setLocalLookup(local);
+            return;
+          }
           setLookup({
             status: "invalid",
             title: "Lien invalide ou expiré",
@@ -74,13 +113,32 @@ function CreateAccessRoute() {
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (!loadedInvite) return;
+    if (!loadedInvite && localLookup?.status !== "valid") return;
     if (password.length < 8) {
       setError("Le mot de passe doit contenir au moins 8 caractères.");
       return;
     }
     if (password !== passwordConfirm) {
       setError("Les mots de passe ne correspondent pas.");
+      return;
+    }
+
+    if (localLookup?.status === "valid") {
+      const result = acceptInvitation(loadV2State(), token, password);
+      if (!result.ok) {
+        setError(result.message);
+        return;
+      }
+      saveV2State(result.state);
+      window.sessionStorage.setItem(
+        LOCAL_ACCESS_SESSION_KEY,
+        result.access.email,
+      );
+      setRedirectPath(result.destination);
+      setError("");
+      window.setTimeout(() => {
+        window.location.assign(result.destination);
+      }, 900);
       return;
     }
 
@@ -114,7 +172,7 @@ function CreateAccessRoute() {
     }, 900);
   }
 
-  if (!loaded || !lookup) return null;
+  if (!loaded || (!lookup && !localLookup)) return null;
 
   if (redirectPath) {
     return (
@@ -139,10 +197,25 @@ function CreateAccessRoute() {
     );
   }
 
-  if (lookup.status !== "valid") {
+  if (localLookup && localLookup.status !== "valid") {
     return (
       <SaasShell action={<HomeLink />}>
-        <SaasHero title={lookup.title} description={lookup.message} />
+        <SaasHero title={localLookup.title} description={localLookup.message} />
+        <section className="mx-auto max-w-3xl px-5 pb-16 md:px-8">
+          <SaasCard className="p-8 text-center md:p-12">
+            <Button asChild className="rounded-full">
+              <Link to="/">Retour a l'accueil</Link>
+            </Button>
+          </SaasCard>
+        </section>
+      </SaasShell>
+    );
+  }
+
+  if (!localLookup && lookup?.status !== "valid") {
+    return (
+      <SaasShell action={<HomeLink />}>
+        <SaasHero title={lookup!.title} description={lookup!.message} />
         <section className="mx-auto max-w-3xl px-5 pb-16 md:px-8">
           <SaasCard className="p-8 text-center md:p-12">
             <Button asChild className="rounded-full">
@@ -157,15 +230,18 @@ function CreateAccessRoute() {
   return (
     <SaasShell action={<HomeLink />}>
       <SaasHero
-        eyebrow={lookup.agency.name}
+        eyebrow={localLookup?.agencyName ?? lookup!.agency.name}
         title="Créez votre accès Signature Immobilier"
-        description={getInviteDescription(lookup)}
+        description={localLookup?.description ?? getInviteDescription(lookup!)}
       />
       <section className="mx-auto max-w-3xl px-5 pb-16 md:px-8">
         <SaasCard className="p-6 md:p-8">
           <form className="grid gap-4" onSubmit={onSubmit}>
             <Field label="Email">
-              <Input value={getInviteEmail(lookup)} readOnly />
+              <Input
+                value={localLookup?.email ?? getInviteEmail(lookup!)}
+                readOnly
+              />
             </Field>
             <Field label="Mot de passe">
               <Input
@@ -214,6 +290,61 @@ function getInviteDescription(
   }
 
   return "Vous allez créer votre mot de passe pour accéder au suivi de votre bien.";
+}
+
+function loadLocalV2Invite(token: string): LocalInviteLookup {
+  const state = loadV2State();
+  const invitation = getInvitationByToken(state, token);
+  if (!invitation) {
+    return {
+      status: "invalid",
+      title: "Lien invalide ou expire",
+      message:
+        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    };
+  }
+
+  if (invitation.status === "accepted") {
+    return {
+      status: "used",
+      title: "Ce lien a deja ete utilise",
+      message:
+        "Connectez-vous depuis Mon suivi ou contactez votre agence si vous avez besoin d'un nouvel acces.",
+    };
+  }
+
+  if (isInvitationExpired(invitation)) {
+    return {
+      status: "expired",
+      title: "Ce lien a expire",
+      message:
+        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    };
+  }
+
+  const agency = getAgencyById(state, invitation.agencyId);
+  return {
+    status: "valid",
+    invitation,
+    agencyName: agency?.name ?? "Signature Immobilier",
+    email: invitation.email,
+    description: getLocalInviteDescription(invitation, agency?.name),
+  };
+}
+
+function getLocalInviteDescription(
+  invitation: V2AccessInvitation,
+  agencyName = "votre agence",
+) {
+  if (invitation.role === "manager") {
+    return `Vous allez creer votre mot de passe pour acceder a l'espace de ${agencyName}.`;
+  }
+
+  if (invitation.role === "agent") {
+    return `Vous allez creer votre mot de passe pour rejoindre l'espace de ${agencyName}.`;
+  }
+
+  return "Vous allez creer votre mot de passe pour acceder au suivi de votre bien.";
 }
 
 function getInviteEmail(
