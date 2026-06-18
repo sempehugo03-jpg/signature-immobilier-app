@@ -48,7 +48,9 @@ export function buildInviteUrl(token: string) {
 export function getInviteDestination(record: InviteTokenRecord) {
   const agencyPath = `/agence/${encodeURIComponent(record.agencySlug)}`;
   if (record.type === "seller_invite") {
-    return `${agencyPath}/vendeur/${encodeURIComponent(record.sellerToken ?? "")}`;
+    return record.sellerToken
+      ? `/vendeur/${encodeURIComponent(record.sellerToken)}`
+      : "";
   }
 
   return agencyPath;

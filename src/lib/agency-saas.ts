@@ -1429,7 +1429,7 @@ export function getInviteRedirectPath(
 ) {
   if (access.type === "seller_invite") {
     const sellerToken = access.sellerToken || property?.sellerToken || "";
-    return `/agence/${agency.slug}/vendeur/${sellerToken}`;
+    return sellerToken ? `/vendeur/${sellerToken}` : "";
   }
 
   return `/agence/${agency.slug}`;

@@ -7,7 +7,7 @@ import {
   Phone,
   Plus,
 } from "lucide-react";
-import { FormEvent, ReactNode, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useState } from "react";
 
 import { SessionLogoutButton } from "@/components/session-logout-button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -37,6 +37,8 @@ import {
   createVisitRequest,
   deleteAgencyDemo,
   deletePreviewDemo,
+  findUserAccessByCredentials,
+  findUserAccessByEmail,
   formatDate,
   formatPrice,
   generatePreviewDemo,
@@ -49,6 +51,7 @@ import {
   getPropertyBySlug,
   getPublicProperties,
   getSellerSpace,
+  getUserAccessDestination,
   loadV2State,
   markPaymentValidated,
   saleSteps,
@@ -61,6 +64,7 @@ import {
   type Property,
   type PropertySaleStep,
   type PublicBadge,
+  type V2AccessInvitation,
   type V2State,
   type VisitRequest,
 } from "@/lib/v2/core";
@@ -73,7 +77,8 @@ const badCredentialsMessage = "Email ou mot de passe incorrect.";
 const unknownLoginMessage =
   "Impossible de vous connecter pour le moment. Reessayez.";
 const noAccessMessage =
-  "Votre compte existe, mais aucun espace n'est associe a cet email.";
+  "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.";
+const LOCAL_ACCESS_SESSION_KEY = "signature_v2_access_email";
 
 function useV2Store() {
   const [state, setState] = useState<V2State>(() => loadV2State());
@@ -85,6 +90,7 @@ function useV2Store() {
 }
 
 export function MonSuiviV2Page() {
+  const { state } = useV2Store();
   const { loading, session } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -93,11 +99,34 @@ export function MonSuiviV2Page() {
   const [showAdmin, setShowAdmin] = useState(false);
   const [adminCode, setAdminCode] = useState("");
   const [adminError, setAdminError] = useState("");
-  const currentEmail = session?.user?.email ?? "";
+  const [localAccessEmail, setLocalAccessEmail] = useState("");
+  const currentEmail = session?.user?.email ?? localAccessEmail;
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setLocalAccessEmail(
+      window.sessionStorage.getItem(LOCAL_ACCESS_SESSION_KEY) ?? "",
+    );
+  }, []);
 
   async function redirectToCurrentUserSpace(token?: string) {
     setBusy(true);
     setError("");
+    if (!token && localAccessEmail) {
+      const access = findUserAccessByEmail(state, localAccessEmail);
+      setBusy(false);
+      if (!access) {
+        setError(noAccessMessage);
+        return;
+      }
+      const destination = getUserAccessDestination(access);
+      if (!destination) {
+        setError(noAccessMessage);
+        return;
+      }
+      window.location.assign(destination);
+      return;
+    }
     const accessToken =
       token ??
       session?.access_token ??
@@ -120,6 +149,25 @@ export function MonSuiviV2Page() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    const localAccess = findUserAccessByCredentials(state, email, password);
+    if (localAccess) {
+      const destination = getUserAccessDestination(localAccess);
+      if (!destination) {
+        setError(noAccessMessage);
+        setBusy(false);
+        return;
+      }
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem(
+          LOCAL_ACCESS_SESSION_KEY,
+          localAccess.email,
+        );
+      }
+      setLocalAccessEmail(localAccess.email);
+      setBusy(false);
+      window.location.assign(destination);
+      return;
+    }
     const { data, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -135,6 +183,11 @@ export function MonSuiviV2Page() {
   async function onChangeAccount() {
     setBusy(true);
     await signOutEverywhere();
+    if (typeof window !== "undefined") {
+      window.sessionStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
+      window.localStorage.removeItem(LOCAL_ACCESS_SESSION_KEY);
+    }
+    setLocalAccessEmail("");
     setEmail("");
     setPassword("");
     setError("");
@@ -746,6 +799,12 @@ export function AgencyPropertyManagePage({
   const property = getPropertyById(state, propertyId);
   const [feedback, setFeedback] = useState("");
   if (!agency || !property) return <NotFound title="Bien introuvable" />;
+  const seller = state.sellers.find((item) => item.propertyId === property.id);
+  const sellerInvitation =
+    state.accessInvitations.find(
+      (invitation) =>
+        invitation.role === "seller" && invitation.propertyId === property.id,
+    ) ?? null;
 
   function saveProperty(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -830,7 +889,9 @@ export function AgencyPropertyManagePage({
       }),
     );
     event.currentTarget.reset();
-    setFeedback("Acces vendeur cree.");
+    setFeedback(
+      "Espace vendeur cree. Invitation preparee. Email reel a brancher.",
+    );
   }
 
   return (
@@ -915,6 +976,13 @@ export function AgencyPropertyManagePage({
               <Input name="email" type="email" placeholder="Email" required />
               <Input name="phone" placeholder="Telephone" required />
             </PanelForm>
+            {(seller || sellerInvitation) && (
+              <InvitationSummary
+                title="Invitation vendeur"
+                invitation={sellerInvitation}
+                sellerToken={seller?.sellerToken}
+              />
+            )}
           </div>
         </div>
       </Section>
@@ -1020,7 +1088,7 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
       }),
     );
     event.currentTarget.reset();
-    setFeedback("Invitation creee.");
+    setFeedback("Invitation preparee. Email reel a brancher.");
   }
 
   return (
@@ -1051,6 +1119,10 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
                   {member.firstName} {member.lastName}
                 </h3>
                 <p className="text-sm text-primary/55">{member.email}</p>
+                <TeamInvitationSummary
+                  invitations={state.accessInvitations}
+                  memberId={member.id}
+                />
               </>
             )}
           />
@@ -1363,7 +1435,7 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
   if (!agency) return <NotFound title="Agence introuvable" />;
   const demoSeller = state.sellers.find((seller) => seller.agencyId === agency.id);
 
-  function addManager(event: FormEvent<HTMLFormElement>) {
+  function addTeamAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isPaymentValidated(state, agency.id)) {
       setManagerFeedback("Validez le paiement avant d'activer l'agence.");
@@ -1372,7 +1444,7 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
     const form = new FormData(event.currentTarget);
     commit(
       createTeamInvite(state, agency.id, {
-        role: "manager",
+        role: readForm(form, "role") as "manager" | "agent",
         firstName: readForm(form, "firstName"),
         lastName: readForm(form, "lastName"),
         email: readForm(form, "email"),
@@ -1380,7 +1452,7 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
       }),
     );
     event.currentTarget.reset();
-    setManagerFeedback("Patron / manager ajoute.");
+    setManagerFeedback("Invitation preparee. Email reel a brancher.");
   }
 
   return (
@@ -1392,9 +1464,11 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
       <Section>
         <div className="grid gap-5 md:grid-cols-2">
           <AgencyPaymentPanel state={state} agency={agency} commit={commit} />
-          <ManagerAccessPanel
+          <AdminAccessInvitationsPanel
+            agency={agency}
+            invitations={state.accessInvitations}
             feedback={managerFeedback}
-            onSubmit={addManager}
+            onSubmit={addTeamAccess}
             paymentValidated={isPaymentValidated(state, agency.id)}
           />
         </div>
@@ -1557,6 +1631,146 @@ function ManagerAccessPanel({
       {feedback && <p className="mt-3 text-sm text-emerald-700">{feedback}</p>}
     </Panel>
   );
+}
+
+function AdminAccessInvitationsPanel({
+  agency,
+  invitations,
+  feedback,
+  onSubmit,
+  paymentValidated,
+}: {
+  agency: Agency;
+  invitations: V2AccessInvitation[];
+  feedback: string;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  paymentValidated: boolean;
+}) {
+  const agencyInvitations = invitations.filter(
+    (invitation) => invitation.agencyId === agency.id,
+  );
+  return (
+    <Panel className="p-5">
+      <h3 className="font-display text-3xl">Acces et invitations</h3>
+      {!paymentValidated && (
+        <p className="mt-2 text-sm text-primary/55">
+          Validez le paiement avant d'activer l'agence.
+        </p>
+      )}
+      <form className="mt-4 grid gap-3 md:grid-cols-2" onSubmit={onSubmit}>
+        <select name="role" className="rounded-md border bg-white px-3 py-2 md:col-span-2">
+          <option value="manager">Patron / manager</option>
+          <option value="agent">Agent</option>
+        </select>
+        <Input name="firstName" placeholder="Prenom" required />
+        <Input name="lastName" placeholder="Nom" required />
+        <Input name="email" type="email" placeholder="Email" required />
+        <Input name="phone" placeholder="Telephone" />
+        <Button className="rounded-full md:col-span-2">
+          Ajouter et preparer l'invitation
+        </Button>
+      </form>
+      {feedback && <p className="mt-3 text-sm text-emerald-700">{feedback}</p>}
+      <div className="mt-5 space-y-3">
+        {agencyInvitations.length ? (
+          agencyInvitations.map((invitation) => (
+            <InvitationSummary
+              key={invitation.id}
+              title={getInvitationRoleLabel(invitation.role)}
+              invitation={invitation}
+            />
+          ))
+        ) : (
+          <p className="rounded-2xl bg-[#faf7f0] p-4 text-sm text-primary/55">
+            Aucune invitation creee pour le moment.
+          </p>
+        )}
+      </div>
+    </Panel>
+  );
+}
+
+function TeamInvitationSummary({
+  invitations,
+  memberId,
+}: {
+  invitations: V2AccessInvitation[];
+  memberId: string;
+}) {
+  const invitation = invitations.find((item) => item.teamMemberId === memberId);
+  if (!invitation) {
+    return (
+      <p className="mt-3 rounded-2xl bg-[#faf7f0] p-3 text-xs text-primary/55">
+        Aucune invitation preparee.
+      </p>
+    );
+  }
+
+  return (
+    <InvitationSummary
+      title={getInvitationRoleLabel(invitation.role)}
+      invitation={invitation}
+    />
+  );
+}
+
+function InvitationSummary({
+  title,
+  invitation,
+  sellerToken,
+}: {
+  title: string;
+  invitation?: V2AccessInvitation | null;
+  sellerToken?: string;
+}) {
+  const sellerPath = sellerToken ? `/vendeur/${sellerToken}` : "";
+  return (
+    <div className="mt-3 rounded-2xl bg-[#faf7f0] p-4 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">{title}</Badge>
+        {invitation && <Badge>{invitation.status}</Badge>}
+      </div>
+      {sellerPath && (
+        <p className="mt-2 break-all text-primary/65">
+          Lien vendeur : {sellerPath}
+        </p>
+      )}
+      {invitation ? (
+        <>
+          <p className="mt-2 break-all text-primary/65">
+            Lien d'invitation : {invitation.inviteUrl}
+          </p>
+          <p className="mt-1 break-all text-primary/65">
+            Destination prevue : {invitation.destination}
+          </p>
+          <p className="mt-1 text-primary/55">
+            Invitation preparee. Email reel a brancher.
+          </p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="rounded-full bg-white"
+              onClick={() => copyText(invitation.inviteUrl)}
+            >
+              Copier le lien
+            </Button>
+            <Button asChild type="button" className="rounded-full">
+              <a href={invitation.inviteUrl}>Ouvrir le lien</a>
+            </Button>
+          </div>
+        </>
+      ) : (
+        <p className="mt-2 text-primary/55">Aucune invitation preparee.</p>
+      )}
+    </div>
+  );
+}
+
+function getInvitationRoleLabel(role: V2AccessInvitation["role"]) {
+  if (role === "manager") return "Patron / manager";
+  if (role === "agent") return "Agent";
+  return "Vendeur";
 }
 
 function DemoAccessPanel({
@@ -2008,6 +2222,12 @@ function getSignInErrorMessage(message: string) {
   return message.toLowerCase().includes("credentials")
     ? badCredentialsMessage
     : unknownLoginMessage;
+}
+
+function copyText(value: string) {
+  if (typeof navigator !== "undefined" && navigator.clipboard) {
+    void navigator.clipboard.writeText(value);
+  }
 }
 
 function readForm(form: FormData, key: string) {
