@@ -55,6 +55,15 @@ type LocalInviteLookup =
       message: string;
     };
 
+type TokenDebug = {
+  source: "Supabase" | "V2 localStorage" | "ancien shared-invites" | "non trouve";
+  status: string;
+  role?: string;
+  sellerToken?: string;
+  destination?: string;
+  note?: string;
+};
+
 export const Route = createFileRoute("/creer-acces/$token")({
   head: () => ({
     meta: [{ title: "Créer mon accès - Signature Immobilier" }],
@@ -68,6 +77,7 @@ function CreateAccessRoute() {
   const [localLookup, setLocalLookup] = useState<LocalInviteLookup | null>(
     null,
   );
+  const [tokenDebug, setTokenDebug] = useState<TokenDebug | null>(null);
   const [v2InviteSource, setV2InviteSource] = useState<
     "supabase" | "local" | null
   >(null);
@@ -87,6 +97,7 @@ function CreateAccessRoute() {
     setLoadedInvite(null);
     setLookup(null);
     setLocalLookup(null);
+    setTokenDebug(null);
     setV2InviteSource(null);
     setError("");
     setRedirectPath("");
@@ -100,16 +111,29 @@ function CreateAccessRoute() {
             supabaseInvite.agencyName,
           ),
         );
+        setTokenDebug(getV2TokenDebug("Supabase", supabaseInvite.invitation));
         setV2InviteSource("supabase");
         setLoaded(true);
       })
       .catch((error) => {
         console.info("Invitation Supabase non lue", error);
+        setTokenDebug({
+          source: "non trouve",
+          status: "Erreur Supabase",
+          note: error instanceof Error ? error.message : String(error),
+        });
       });
 
     const local = loadLocalV2Invite(token);
     if (local) {
       setLocalLookup(local);
+      setTokenDebug(
+        getLocalLookupDebug(
+          "V2 localStorage",
+          local,
+          "Invitation Supabase introuvable, fallback utilise.",
+        ),
+      );
       setV2InviteSource("local");
       setLoaded(true);
       return () => {
@@ -122,6 +146,12 @@ function CreateAccessRoute() {
         if (cancelled) return;
         setLoadedInvite(result);
         setLookup(result.lookup);
+        setTokenDebug(
+          getSharedInviteDebug(
+            result.lookup,
+            "Invitation Supabase introuvable, fallback utilise.",
+          ),
+        );
       })
       .catch((error) => {
         console.info("Invitation non lue", error);
@@ -129,15 +159,27 @@ function CreateAccessRoute() {
           const local = loadLocalV2Invite(token);
           if (local) {
             setLocalLookup(local);
+            setTokenDebug(
+              getLocalLookupDebug(
+                "V2 localStorage",
+                local,
+                "Invitation Supabase introuvable, fallback utilise.",
+              ),
+            );
             setV2InviteSource("local");
             return;
           }
           setLookup({
             status: "invalid",
             title: "Lien invalide ou expiré",
-            message:
-              "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
-          });
+              message:
+                "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+            });
+            setTokenDebug({
+              source: "non trouve",
+              status: "Token non trouve",
+              note: "Invitation Supabase introuvable, aucun fallback valide.",
+            });
         }
       })
       .finally(() => {
@@ -262,6 +304,7 @@ function CreateAccessRoute() {
               <Link to="/">Retour a l'accueil</Link>
             </Button>
           </SaasCard>
+          {tokenDebug && <InviteTokenDebugPanel debug={tokenDebug} />}
         </section>
       </SaasShell>
     );
@@ -343,6 +386,7 @@ function CreateAccessRoute() {
             </Button>
           </form>
         </SaasCard>
+        {tokenDebug && <InviteTokenDebugPanel debug={tokenDebug} />}
       </section>
     </SaasShell>
   );
@@ -360,6 +404,89 @@ function getInviteDescription(
   }
 
   return "Vous allez créer votre mot de passe pour accéder au suivi de votre bien.";
+}
+
+function getV2TokenDebug(
+  source: TokenDebug["source"],
+  invitation: V2AccessInvitation,
+  note?: string,
+): TokenDebug {
+  return {
+    source,
+    status: invitation.status,
+    role: invitation.role,
+    sellerToken: invitation.sellerToken,
+    destination: invitation.destination || getInvitationDestination(invitation),
+    note,
+  };
+}
+
+function getLocalLookupDebug(
+  source: TokenDebug["source"],
+  lookup: LocalInviteLookup,
+  note?: string,
+): TokenDebug {
+  if (lookup.status !== "valid") {
+    return {
+      source,
+      status: lookup.status,
+      note,
+    };
+  }
+
+  return getV2TokenDebug(source, lookup.invitation, note);
+}
+
+function getSharedInviteDebug(
+  lookup: InviteAccessLookup,
+  note?: string,
+): TokenDebug {
+  if (lookup.status !== "valid") {
+    return {
+      source: "ancien shared-invites",
+      status: lookup.status,
+      note,
+    };
+  }
+
+  const destination =
+    "redirectPath" in lookup && lookup.redirectPath
+      ? lookup.redirectPath
+      : "Destination calculee par l'ancien systeme";
+
+  return {
+    source: "ancien shared-invites",
+    status: lookup.status,
+    role: lookup.access.type,
+    sellerToken: lookup.access.sellerToken ?? lookup.property?.sellerToken,
+    destination,
+    note,
+  };
+}
+
+function InviteTokenDebugPanel({ debug }: { debug: TokenDebug }) {
+  const rows = [
+    ["Source du token", debug.source],
+    ["Etat trouve", debug.status],
+    ["Role", debug.role ?? ""],
+    ["SellerToken", debug.sellerToken ?? ""],
+    ["Destination", debug.destination ?? ""],
+    ["Note", debug.note ?? ""],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <SaasCard className="mt-5 border border-amber-200 bg-amber-50 p-5 text-left text-sm">
+      <p className="font-semibold text-primary">Diagnostic temporaire</p>
+      <div className="mt-3 grid gap-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid gap-1 sm:grid-cols-[160px_1fr]">
+            <span className="font-medium text-primary">{label}</span>
+            <span className="break-all text-primary/65">{value}</span>
+          </div>
+        ))}
+      </div>
+    </SaasCard>
+  );
 }
 
 function buildV2InviteLookup(

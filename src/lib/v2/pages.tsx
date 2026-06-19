@@ -92,6 +92,19 @@ type AccessResult =
   | { ok: true; destination: string; access?: CurrentAccessSnapshot }
   | { ok: false; message: string };
 
+type SellerInviteDebug = {
+  source: "Supabase OK" | "localStorage fallback";
+  supabaseError?: string;
+  email: string;
+  role: "seller";
+  sellerToken: string;
+  propertyId: string;
+  agencyId: string;
+  inviteUrl: string;
+  destination: string;
+  sellerUrl: string;
+};
+
 const badCredentialsMessage = "Email ou mot de passe incorrect.";
 const unknownLoginMessage =
   "Impossible de vous connecter pour le moment. Reessayez.";
@@ -1150,6 +1163,9 @@ export function AgencyPropertyManagePage({
   const agency = getAgencyBySlug(state, agencySlug);
   const property = getPropertyById(state, propertyId);
   const [feedback, setFeedback] = useState("");
+  const [sellerDebug, setSellerDebug] = useState<SellerInviteDebug | null>(
+    null,
+  );
   if (!agency || !property) return <NotFound title="Bien introuvable" />;
   const seller = state.sellers.find((item) => item.propertyId === property.id);
   const sellerInvitation =
@@ -1272,10 +1288,39 @@ export function AgencyPropertyManagePage({
       setFeedback(
         "Espace vendeur cree. Invitation Supabase creee. Email reel non configure : copiez le lien.",
       );
+      setSellerDebug({
+        source: "Supabase OK",
+        email: sellerInput.email,
+        role: "seller",
+        sellerToken: remoteInvite.sellerToken,
+        propertyId: remoteInvite.invitation.propertyId ?? property.id,
+        agencyId: remoteInvite.invitation.agencyId,
+        inviteUrl: remoteInvite.invitation.inviteUrl,
+        destination: remoteInvite.invitation.destination,
+        sellerUrl: `/vendeur/${remoteInvite.sellerToken}`,
+      });
     } else {
+      const localInvitation =
+        nextState.accessInvitations.find(
+          (invitation) =>
+            invitation.role === "seller" && invitation.propertyId === property.id,
+        ) ?? null;
+      const sellerToken = nextSeller?.sellerToken ?? property.sellerToken ?? "";
       setFeedback(
         `Espace vendeur cree en local. ${remoteInvite.message} Email reel non configure : copiez le lien local.`,
       );
+      setSellerDebug({
+        source: "localStorage fallback",
+        supabaseError: remoteInvite.message,
+        email: sellerInput.email,
+        role: "seller",
+        sellerToken,
+        propertyId: property.id,
+        agencyId: agency.id,
+        inviteUrl: localInvitation?.inviteUrl ?? "",
+        destination: localInvitation?.destination ?? `/vendeur/${sellerToken}`,
+        sellerUrl: sellerToken ? `/vendeur/${sellerToken}` : "",
+      });
     }
 
     commit(nextState);
@@ -1287,6 +1332,7 @@ export function AgencyPropertyManagePage({
       <Header title={property.title} text="Gestion complete d'un seul bien." />
       <Section>
         {feedback && <div className="mb-4 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-700">{feedback}</div>}
+        {sellerDebug && <SellerInviteDebugPanel debug={sellerDebug} />}
         <div className="grid gap-5 lg:grid-cols-[0.8fr_1.2fr]">
           <div className="space-y-5">
             <Panel className="overflow-hidden">
@@ -2202,6 +2248,42 @@ function TeamInvitationSummary({
       title={getInvitationRoleLabel(invitation.role)}
       invitation={invitation}
     />
+  );
+}
+
+function SellerInviteDebugPanel({ debug }: { debug: SellerInviteDebug }) {
+  const rows = [
+    ["Source utilisee", debug.source],
+    ["Erreur Supabase", debug.supabaseError ?? ""],
+    ["Email vendeur", debug.email],
+    ["Role", debug.role],
+    ["SellerToken", debug.sellerToken],
+    ["PropertyId", debug.propertyId],
+    ["AgencyId", debug.agencyId],
+    ["Invitation", debug.inviteUrl],
+    ["Destination prevue", debug.destination],
+    ["Lien espace vendeur direct", debug.sellerUrl],
+  ].filter(([, value]) => Boolean(value));
+
+  return (
+    <Panel className="mb-4 border border-amber-200 bg-amber-50 p-5 text-sm">
+      <div className="flex flex-wrap items-center gap-2">
+        <Badge variant="secondary">Diagnostic invitation vendeur</Badge>
+        <Badge>{debug.source}</Badge>
+      </div>
+      <div className="mt-4 grid gap-2">
+        {rows.map(([label, value]) => (
+          <div key={label} className="grid gap-1 sm:grid-cols-[180px_1fr]">
+            <span className="font-medium text-primary">{label}</span>
+            <span className="break-all text-primary/65">{value}</span>
+          </div>
+        ))}
+      </div>
+      <p className="mt-4 text-xs text-primary/55">
+        Diagnostic temporaire : il indique si l'invitation vendeur vient de
+        Supabase ou du fallback localStorage.
+      </p>
+    </Panel>
   );
 }
 
