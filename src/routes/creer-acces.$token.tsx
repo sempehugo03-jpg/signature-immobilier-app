@@ -29,6 +29,10 @@ import {
   type V2AccessInvitation,
   type V2UserAccess,
 } from "@/lib/v2/core";
+import {
+  acceptInviteInSupabase,
+  getInviteByTokenFromSupabase,
+} from "@/lib/v2/supabase-access";
 
 const LOCAL_ACCESS_SESSION_KEY = "signature_v2_access_email";
 const LOCAL_ACCESS_ROLE_KEY = "signature_v2_access_role";
@@ -64,6 +68,9 @@ function CreateAccessRoute() {
   const [localLookup, setLocalLookup] = useState<LocalInviteLookup | null>(
     null,
   );
+  const [v2InviteSource, setV2InviteSource] = useState<
+    "supabase" | "local" | null
+  >(null);
   const [loadedInvite, setLoadedInvite] = useState<LoadedInviteAccess | null>(
     null,
   );
@@ -80,12 +87,30 @@ function CreateAccessRoute() {
     setLoadedInvite(null);
     setLookup(null);
     setLocalLookup(null);
+    setV2InviteSource(null);
     setError("");
     setRedirectPath("");
+
+    void getInviteByTokenFromSupabase(token)
+      .then((supabaseInvite) => {
+        if (cancelled || !supabaseInvite) return;
+        setLocalLookup(
+          buildV2InviteLookup(
+            supabaseInvite.invitation,
+            supabaseInvite.agencyName,
+          ),
+        );
+        setV2InviteSource("supabase");
+        setLoaded(true);
+      })
+      .catch((error) => {
+        console.info("Invitation Supabase non lue", error);
+      });
 
     const local = loadLocalV2Invite(token);
     if (local) {
       setLocalLookup(local);
+      setV2InviteSource("local");
       setLoaded(true);
       return () => {
         cancelled = true;
@@ -104,6 +129,7 @@ function CreateAccessRoute() {
           const local = loadLocalV2Invite(token);
           if (local) {
             setLocalLookup(local);
+            setV2InviteSource("local");
             return;
           }
           setLookup({
@@ -136,6 +162,23 @@ function CreateAccessRoute() {
     }
 
     if (localLookup?.status === "valid") {
+      if (v2InviteSource === "supabase") {
+        setSubmitting(true);
+        const result = await acceptInviteInSupabase(token, password);
+        setSubmitting(false);
+        if (!result.ok) {
+          setError(result.message);
+          return;
+        }
+        saveAcceptedAccessSession(result.access);
+        setRedirectPath(result.destination);
+        setError("");
+        window.setTimeout(() => {
+          window.location.assign(result.destination);
+        }, 900);
+        return;
+      }
+
       const result = acceptInvite(loadV2State(), token, password);
       if (!result.ok) {
         setError(result.message);
@@ -317,6 +360,48 @@ function getInviteDescription(
   }
 
   return "Vous allez créer votre mot de passe pour accéder au suivi de votre bien.";
+}
+
+function buildV2InviteLookup(
+  invitation: V2AccessInvitation,
+  agencyName = "Signature Immobilier",
+): LocalInviteLookup {
+  if (invitation.status === "accepted") {
+    return {
+      status: "used",
+      title: "Ce lien a deja ete utilise",
+      message:
+        "Connectez-vous depuis Mon suivi ou contactez votre agence si vous avez besoin d'un nouvel acces.",
+    };
+  }
+
+  if (isInvitationExpired(invitation)) {
+    return {
+      status: "expired",
+      title: "Ce lien a expire",
+      message:
+        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
+    };
+  }
+
+  const destination = invitation.destination || getInvitationDestination(invitation);
+  if (!destination) {
+    return {
+      status: "invalid",
+      title: "Acces incomplet",
+      message: getAccessDestinationError(invitation),
+    };
+  }
+
+  return {
+    status: "valid",
+    invitation,
+    agencyName,
+    email: invitation.email,
+    description: getLocalInviteDescription(invitation, agencyName),
+    roleLabel: getLocalInviteRoleLabel(invitation),
+    destination,
+  };
 }
 
 function loadLocalV2Invite(token: string): LocalInviteLookup | null {
