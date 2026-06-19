@@ -2022,9 +2022,14 @@ function InvitationSummary({
         {invitation && <Badge>{invitation.status}</Badge>}
       </div>
       {sellerPath && (
+        <>
         <p className="mt-2 break-all text-primary/65">
-          Lien vendeur : {sellerPath}
+          SellerToken : {sellerToken}
         </p>
+        <p className="mt-2 break-all text-sm text-slate-600">
+          Lien espace vendeur : {sellerPath}
+        </p>
+        </>
       )}
       {invitation ? (
         <>
