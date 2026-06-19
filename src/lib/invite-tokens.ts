@@ -46,14 +46,17 @@ export function buildInviteUrl(token: string) {
 }
 
 export function getInviteDestination(record: InviteTokenRecord) {
-  const agencyPath = `/agence/${encodeURIComponent(record.agencySlug)}`;
   if (record.type === "seller_invite") {
     return record.sellerToken
       ? `/vendeur/${encodeURIComponent(record.sellerToken)}`
       : "";
   }
 
-  return agencyPath;
+  if (record.type === "manager_invite") {
+    return `/patron/${encodeURIComponent(record.agencySlug)}`;
+  }
+
+  return `/agent/${encodeURIComponent(record.agencySlug)}`;
 }
 
 export function getEffectiveInviteStatus(record: InviteTokenRecord) {
