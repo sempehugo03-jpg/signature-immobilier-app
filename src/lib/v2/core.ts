@@ -676,8 +676,8 @@ export function getUserAccessDestination(access: V2UserAccess) {
       ? `/patron/${access.agencySlug}`
       : `/agent/${access.agencySlug}`;
   }
-  if (access.role === "seller" && access.sellerToken) {
-    return `/vendeur/${access.sellerToken}`;
+  if (access.role === "seller") {
+    return access.sellerToken ? `/vendeur/${access.sellerToken}` : "";
   }
 
   if (access.role === "seller") return "";
