@@ -69,7 +69,10 @@ export function PropertyDetails({ property, onClose }: PropertyDetailsProps) {
   const gallery = property.photos.length
     ? property.photos
         .slice()
-        .sort((a, b) => a.order - b.order)
+        .sort(
+          (a, b) =>
+            Number(b.isMain) - Number(a.isMain) || a.order - b.order,
+        )
         .map((photo) => photo.url)
     : [property.imageUrl || property.image];
   const secondaryPhotos = gallery.slice(1, 5);
