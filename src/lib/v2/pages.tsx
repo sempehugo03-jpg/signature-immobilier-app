@@ -73,6 +73,12 @@ import {
   type V2UserAccess,
   type VisitRequest,
 } from "@/lib/v2/core";
+import {
+  createSellerInviteInSupabase,
+  createTeamInviteInSupabase,
+  findUserAccessByCredentialsFromSupabase,
+  getSellerSpaceFromSupabase,
+} from "@/lib/v2/supabase-access";
 
 type AccessRoleSnapshot = "admin" | "manager" | "agent" | "seller";
 type CurrentAccessSnapshot = {
@@ -204,6 +210,24 @@ function getAgencyRoleFromSnapshot(
   return "manager";
 }
 
+function getSnapshotDestination(access: CurrentAccessSnapshot) {
+  if (access.role === "seller") {
+    return access.sellerToken ? `/vendeur/${access.sellerToken}` : "";
+  }
+
+  if (access.role === "manager") {
+    return access.agencySlug ? `/patron/${access.agencySlug}` : "";
+  }
+
+  if (access.role === "agent") {
+    return access.agencySlug ? `/agent/${access.agencySlug}` : "";
+  }
+
+  if (access.role === "admin") return "/admin";
+
+  return "";
+}
+
 export function MonSuiviV2Page() {
   const { state } = useV2Store();
   const { loading, session } = useAuth();
@@ -228,6 +252,16 @@ export function MonSuiviV2Page() {
     setBusy(true);
     setError("");
     if (!token && localAccessEmail) {
+      const snapshot = readLocalAccessSnapshot(state);
+      const snapshotDestination = snapshot
+        ? getSnapshotDestination(snapshot)
+        : "";
+      if (snapshotDestination) {
+        setBusy(false);
+        window.location.assign(snapshotDestination);
+        return;
+      }
+
       const access = findUserAccessByEmail(state, localAccessEmail);
       setBusy(false);
       if (!access) {
@@ -266,6 +300,24 @@ export function MonSuiviV2Page() {
     event.preventDefault();
     setBusy(true);
     setError("");
+    const supabaseAccess = await findUserAccessByCredentialsFromSupabase(
+      email,
+      password,
+    );
+    if (supabaseAccess) {
+      const destination = getUserAccessDestination(supabaseAccess);
+      if (!destination) {
+        setError(getAccessDestinationError(supabaseAccess));
+        setBusy(false);
+        return;
+      }
+      saveLocalAccessSession(supabaseAccess);
+      setLocalAccessEmail(supabaseAccess.email);
+      setBusy(false);
+      window.location.assign(destination);
+      return;
+    }
+
     const localAccess = findUserAccessByCredentials(state, email, password);
     if (localAccess) {
       const destination = getUserAccessDestination(localAccess);
@@ -671,10 +723,47 @@ export function PublicEstimationPage({ agencySlug }: { agencySlug: string }) {
   );
 }
 
+function useSellerSpaceData(sellerToken: string, state: V2State) {
+  const localSeller = getSellerByToken(state, sellerToken);
+  const localSpace = getSellerSpace(state, sellerToken);
+  const [remoteSpace, setRemoteSpace] = useState<any | null>(null);
+  const [remoteChecked, setRemoteChecked] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    setRemoteSpace(null);
+    setRemoteChecked(false);
+    getSellerSpaceFromSupabase(sellerToken)
+      .then((space) => {
+        if (!cancelled) setRemoteSpace(space);
+      })
+      .catch((error) => {
+        console.info("Espace vendeur Supabase non lu", error);
+      })
+      .finally(() => {
+        if (!cancelled) setRemoteChecked(true);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sellerToken]);
+
+  const space =
+    remoteSpace?.property && remoteSpace?.agency ? remoteSpace : localSpace;
+  const seller = remoteSpace?.seller ?? localSeller;
+
+  return {
+    seller,
+    space,
+    loading: !remoteChecked && !localSpace,
+  };
+}
+
 export function SellerHomePage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
-  const seller = getSellerByToken(state, sellerToken);
-  const space = getSellerSpace(state, sellerToken);
+  const { seller, space, loading } = useSellerSpaceData(sellerToken, state);
+  if (loading) return null;
   if (!space) {
     return (
       <NotFound
@@ -719,8 +808,8 @@ export function SellerHomePage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerPropertyPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
-  const seller = getSellerByToken(state, sellerToken);
-  const space = getSellerSpace(state, sellerToken);
+  const { seller, space, loading } = useSellerSpaceData(sellerToken, state);
+  if (loading) return null;
   if (!space) {
     return (
       <NotFound
@@ -739,8 +828,8 @@ export function SellerPropertyPage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerVisitsPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
-  const seller = getSellerByToken(state, sellerToken);
-  const space = getSellerSpace(state, sellerToken);
+  const { seller, space, loading } = useSellerSpaceData(sellerToken, state);
+  if (loading) return null;
   if (!space) {
     return (
       <NotFound
@@ -775,8 +864,8 @@ export function SellerVisitsPage({ sellerToken }: { sellerToken: string }) {
 
 export function SellerDocumentsPage({ sellerToken }: { sellerToken: string }) {
   const { state } = useV2Store();
-  const seller = getSellerByToken(state, sellerToken);
-  const space = getSellerSpace(state, sellerToken);
+  const { seller, space, loading } = useSellerSpaceData(sellerToken, state);
+  if (loading) return null;
   if (!space) {
     return (
       <NotFound
@@ -1140,21 +1229,57 @@ export function AgencyPropertyManagePage({
     setFeedback("Document ajoute.");
   }
 
-  function addSeller(event: FormEvent<HTMLFormElement>) {
+  async function addSeller(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
-    commit(
-      createSellerInvite(state, agency, property, {
-        firstName: readForm(form, "firstName"),
-        lastName: readForm(form, "lastName"),
-        email: readForm(form, "email"),
-        phone: readForm(form, "phone"),
-      }),
+    const sellerInput = {
+      firstName: readForm(form, "firstName"),
+      lastName: readForm(form, "lastName"),
+      email: readForm(form, "email"),
+      phone: readForm(form, "phone"),
+    };
+    let nextState = createSellerInvite(state, agency, property, sellerInput);
+    const nextSeller = nextState.sellers.find(
+      (item) => item.propertyId === property.id,
     );
-    event.currentTarget.reset();
-    setFeedback(
-      "Espace vendeur cree. Invitation creee. Email reel non configure : copiez le lien.",
-    );
+    const remoteInvite = await createSellerInviteInSupabase({
+      agency,
+      property: {
+        ...property,
+        sellerToken: nextSeller?.sellerToken ?? property.sellerToken,
+      },
+      ...sellerInput,
+      sellerToken: nextSeller?.sellerToken,
+    });
+
+    if (remoteInvite.ok) {
+      const displayInvite = {
+        ...remoteInvite.invitation,
+        agencyId: agency.id,
+        propertyId: property.id,
+      };
+      nextState = {
+        ...nextState,
+        accessInvitations: [
+          displayInvite,
+          ...nextState.accessInvitations.filter(
+            (invitation) =>
+              !(invitation.role === "seller" && invitation.propertyId === property.id),
+          ),
+        ],
+      };
+      setFeedback(
+        "Espace vendeur cree. Invitation Supabase creee. Email reel non configure : copiez le lien.",
+      );
+    } else {
+      setFeedback(
+        `Espace vendeur cree en local. ${remoteInvite.message} Email reel non configure : copiez le lien local.`,
+      );
+    }
+
+    commit(nextState);
+    formElement.reset();
   }
 
   return (
@@ -1360,8 +1485,9 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
     );
   }
 
-  function addAgent(event: FormEvent<HTMLFormElement>) {
+  async function addAgent(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     const role = readForm(form, "role") as "manager" | "agent";
     const input = {
@@ -1370,13 +1496,50 @@ export function AgencyAgentsPage({ agencySlug }: { agencySlug: string }) {
       email: readForm(form, "email"),
       phone: readForm(form, "phone"),
     };
-    commit(
+    let nextState =
       role === "manager"
         ? createManagerInvite(state, agency.id, input)
-        : createAgentInvite(state, agency.id, input),
+        : createAgentInvite(state, agency.id, input);
+    const nextMember = nextState.teamMembers.find(
+      (member) => member.email === input.email.trim().toLowerCase(),
     );
-    event.currentTarget.reset();
-    setFeedback("Invitation creee. Email reel non configure : copiez le lien.");
+    const remoteInvite = await createTeamInviteInSupabase({
+      agency,
+      role,
+      ...input,
+    });
+
+    if (remoteInvite.ok) {
+      const displayInvite = {
+        ...remoteInvite.invitation,
+        agencyId: agency.id,
+        teamMemberId: nextMember?.id,
+      };
+      nextState = {
+        ...nextState,
+        accessInvitations: [
+          displayInvite,
+          ...nextState.accessInvitations.filter(
+            (invitation) =>
+              !(
+                invitation.teamMemberId === nextMember?.id ||
+                (invitation.email === displayInvite.email &&
+                  invitation.role === displayInvite.role)
+              ),
+          ),
+        ],
+      };
+      setFeedback(
+        "Invitation Supabase creee. Email reel non configure : copiez le lien.",
+      );
+    } else {
+      setFeedback(
+        `Invitation locale creee. ${remoteInvite.message} Email reel non configure : copiez le lien local.`,
+      );
+    }
+
+    commit(nextState);
+    formElement.reset();
   }
 
   return (
@@ -1722,12 +1885,13 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
   if (!agency) return <NotFound title="Agence introuvable" />;
   const demoSeller = state.sellers.find((seller) => seller.agencyId === agency.id);
 
-  function addTeamAccess(event: FormEvent<HTMLFormElement>) {
+  async function addTeamAccess(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!isPaymentValidated(state, agency.id)) {
       setManagerFeedback("Validez le paiement avant d'activer l'agence.");
       return;
     }
+    const formElement = event.currentTarget;
     const form = new FormData(event.currentTarget);
     const role = readForm(form, "role") as "manager" | "agent";
     const input = {
@@ -1736,13 +1900,50 @@ export function AdminAgencyDetailPage({ agencyId }: { agencyId: string }) {
       email: readForm(form, "email"),
       phone: readForm(form, "phone"),
     };
-    commit(
+    let nextState =
       role === "manager"
         ? createManagerInvite(state, agency.id, input)
-        : createAgentInvite(state, agency.id, input),
+        : createAgentInvite(state, agency.id, input);
+    const nextMember = nextState.teamMembers.find(
+      (member) => member.email === input.email.trim().toLowerCase(),
     );
-    event.currentTarget.reset();
-    setManagerFeedback("Invitation creee. Email reel non configure : copiez le lien.");
+    const remoteInvite = await createTeamInviteInSupabase({
+      agency,
+      role,
+      ...input,
+    });
+
+    if (remoteInvite.ok) {
+      const displayInvite = {
+        ...remoteInvite.invitation,
+        agencyId: agency.id,
+        teamMemberId: nextMember?.id,
+      };
+      nextState = {
+        ...nextState,
+        accessInvitations: [
+          displayInvite,
+          ...nextState.accessInvitations.filter(
+            (invitation) =>
+              !(
+                invitation.teamMemberId === nextMember?.id ||
+                (invitation.email === displayInvite.email &&
+                  invitation.role === displayInvite.role)
+              ),
+          ),
+        ],
+      };
+      setManagerFeedback(
+        "Invitation Supabase creee. Email reel non configure : copiez le lien.",
+      );
+    } else {
+      setManagerFeedback(
+        `Invitation locale creee. ${remoteInvite.message} Email reel non configure : copiez le lien local.`,
+      );
+    }
+
+    commit(nextState);
+    formElement.reset();
   }
 
   return (
