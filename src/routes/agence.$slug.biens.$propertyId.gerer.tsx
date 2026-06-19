@@ -65,10 +65,11 @@ import {
   deletePropertyDocumentFile,
   deletePropertyPhotoFile,
   getPropertyUploadErrorMessage,
-  PropertyUploadError,
+  type UploadedPropertyFile,
   uploadPropertyDocument,
   uploadPropertyPhoto,
 } from "@/lib/property-storage";
+import { signOutToMonSuivi } from "@/lib/session-cleanup";
 import {
   createSharedSellerInviteForProperty,
   getSharedInviteStorageWarning,
@@ -236,7 +237,7 @@ function AgencyPropertyDetailRoute() {
 
     try {
       for (const file of files) {
-        let uploaded;
+        let uploaded: UploadedPropertyFile;
         let localFallback = false;
 
         try {
@@ -330,51 +331,69 @@ function AgencyPropertyDetailRoute() {
   }
 
   async function onDocumentFileSelected(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files ?? []);
     event.target.value = "";
-    if (!agency || !property || !file) return;
+    if (!agency || !property || !files.length) return;
 
     setUploadingDocument(true);
+    let nextProperty = property;
+    let addedRemote = 0;
+    let addedLocal = 0;
     setFeedback("Envoi du document…");
 
     try {
-      let localFallback = false;
-      let uploaded;
-      try {
-        uploaded = await uploadPropertyDocument({
-          agencySlug: agency.slug,
-          propertyId: property.id,
-          file,
+      for (const file of files) {
+        let localFallback = false;
+        let uploaded: UploadedPropertyFile;
+        try {
+          uploaded = await uploadPropertyDocument({
+            agencySlug: agency.slug,
+            propertyId: property.id,
+            file,
+          });
+          addedRemote += 1;
+        } catch (error) {
+          if (!shouldUseLocalFileFallback(error)) throw error;
+          console.info("Upload document distant indisponible, fallback local", error);
+          uploaded = createLocalUploadedFile(file);
+          localFallback = true;
+          addedLocal += 1;
+        }
+
+        nextProperty = addPropertyDocument(nextProperty, {
+          name:
+            files.length === 1 && documentForm.name.trim()
+              ? documentForm.name.trim()
+              : getFileDisplayName(uploaded.name),
+          type: documentForm.type,
+          documentType: documentForm.type,
+          storagePath: localFallback ? "" : uploaded.path,
+          url: uploaded.url,
+          fileName: uploaded.name,
+          size: uploaded.size,
+          mimeType: uploaded.type,
+          visibleToSeller: documentForm.visibleToSeller,
         });
-      } catch (error) {
-        if (!shouldUseLocalFileFallback(error)) throw error;
-        console.info("Upload document distant indisponible, fallback local", error);
-        uploaded = createLocalUploadedFile(file);
-        localFallback = true;
       }
-      const nextProperty = addPropertyDocument(property, {
-        name: documentForm.name.trim() || getFileDisplayName(uploaded.name),
-        type: documentForm.type,
-        documentType: documentForm.type,
-        storagePath: localFallback ? "" : uploaded.path,
-        url: uploaded.url,
-        fileName: uploaded.name,
-        size: uploaded.size,
-        mimeType: uploaded.type,
-        visibleToSeller: documentForm.visibleToSeller,
-      });
       setProperty(nextProperty);
       setDocumentForm({
         name: "",
         type: "Mandat",
         visibleToSeller: true,
       });
-      setFeedback("Document ajouté.");
-      if (localFallback) {
-        setFeedback("Document ajouté localement, stockage distant non configuré.");
+      setFeedback(files.length > 1 ? "Documents ajoutés." : "Document ajouté.");
+      if (addedLocal > 0) {
+        setFeedback(
+          addedRemote > 0
+            ? "Documents ajoutés. Certains fichiers ont été ajoutés localement, stockage distant non configuré."
+            : files.length > 1
+              ? "Fichiers ajoutés localement. Stockage distant non configuré."
+              : "Fichier ajouté localement. Stockage distant non configuré.",
+        );
       }
     } catch (error) {
       console.info("Upload document non finalisé", error);
+      setProperty(nextProperty);
       setFeedback(getPropertyUploadErrorMessage(error, "document"));
     } finally {
       setUploadingDocument(false);
@@ -1190,6 +1209,7 @@ function AgencyPropertyDetailRoute() {
                 ref={documentInputRef}
                 type="file"
                 accept="application/pdf,image/*,.doc,.docx"
+                multiple
                 className="hidden"
                 onChange={onDocumentFileSelected}
               />
@@ -1394,7 +1414,13 @@ function LogoutLink() {
       variant="outline"
       className="rounded-full border-[#d8cfc2] bg-white"
     >
-      <Link to="/">
+      <Link
+        to="/mon-suivi"
+        onClick={(event) => {
+          event.preventDefault();
+          void signOutToMonSuivi();
+        }}
+      >
         <LogOut className="h-4 w-4" />
         Déconnexion
       </Link>
@@ -1402,7 +1428,7 @@ function LogoutLink() {
   );
 }
 
-function createLocalUploadedFile(file: File) {
+function createLocalUploadedFile(file: File): UploadedPropertyFile {
   return {
     url: URL.createObjectURL(file),
     path: "",
@@ -1413,14 +1439,21 @@ function createLocalUploadedFile(file: File) {
 }
 
 function shouldUseLocalFileFallback(error: unknown) {
-  if (error instanceof PropertyUploadError) {
-    return (
-      error.code === "supabase_not_configured" ||
-      error.code === "upload_failed"
-    );
+  const code = getPropertyUploadErrorCode(error);
+  return code !== "file_too_large" && code !== "invalid_file_type";
+}
+
+function getPropertyUploadErrorCode(error: unknown) {
+  if (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof error.code === "string"
+  ) {
+    return error.code;
   }
 
-  return true;
+  return "";
 }
 
 function getFileDisplayName(fileName: string) {
