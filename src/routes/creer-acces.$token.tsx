@@ -19,7 +19,9 @@ import {
 } from "@/lib/shared-invites";
 import {
   acceptInvite,
+  getAccessDestinationError,
   getAgencyById,
+  getInvitationDestination,
   getInviteByToken,
   isInvitationExpired,
   loadV2State,
@@ -40,6 +42,8 @@ type LocalInviteLookup =
       agencyName: string;
       email: string;
       description: string;
+      roleLabel: string;
+      destination: string;
     }
   | {
       status: "invalid" | "used" | "expired";
@@ -79,14 +83,18 @@ function CreateAccessRoute() {
     setError("");
     setRedirectPath("");
 
+    const local = loadLocalV2Invite(token);
+    if (local) {
+      setLocalLookup(local);
+      setLoaded(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     loadInviteAccess(token)
       .then((result) => {
         if (cancelled) return;
-        const local = loadLocalV2Invite(token);
-        if (local.status !== "invalid" && result.lookup.status !== "valid") {
-          setLocalLookup(local);
-          return;
-        }
         setLoadedInvite(result);
         setLookup(result.lookup);
       })
@@ -94,7 +102,7 @@ function CreateAccessRoute() {
         console.info("Invitation non lue", error);
         if (!cancelled) {
           const local = loadLocalV2Invite(token);
-          if (local.status !== "invalid") {
+          if (local) {
             setLocalLookup(local);
             return;
           }
@@ -241,9 +249,24 @@ function CreateAccessRoute() {
       <section className="mx-auto max-w-3xl px-5 pb-16 md:px-8">
         <SaasCard className="p-6 md:p-8">
           <form className="grid gap-4" onSubmit={onSubmit}>
+            {localLookup?.status === "valid" ? (
+              <div className="rounded-[24px] border border-[#e6ddcf] bg-[#fbf7ef] p-4 text-sm text-primary/70">
+                <p>
+                  Role : <span className="font-semibold text-primary">{localLookup.roleLabel}</span>
+                </p>
+                <p className="mt-2 break-all">
+                  Destination prevue :{" "}
+                  <span className="font-semibold text-primary">{localLookup.destination}</span>
+                </p>
+              </div>
+            ) : null}
             <Field label="Email">
               <Input
-                value={localLookup?.email ?? getInviteEmail(lookup!)}
+                value={
+                  localLookup?.status === "valid"
+                    ? localLookup.email
+                    : getInviteEmail(lookup!)
+                }
                 readOnly
               />
             </Field>
@@ -296,16 +319,11 @@ function getInviteDescription(
   return "Vous allez créer votre mot de passe pour accéder au suivi de votre bien.";
 }
 
-function loadLocalV2Invite(token: string): LocalInviteLookup {
+function loadLocalV2Invite(token: string): LocalInviteLookup | null {
   const state = loadV2State();
   const invitation = getInviteByToken(state, token);
   if (!invitation) {
-    return {
-      status: "invalid",
-      title: "Lien invalide ou expire",
-      message:
-        "Contactez Signature Immobilier ou votre agence pour recevoir un nouveau lien.",
-    };
+    return null;
   }
 
   if (invitation.status === "accepted") {
@@ -327,12 +345,23 @@ function loadLocalV2Invite(token: string): LocalInviteLookup {
   }
 
   const agency = getAgencyById(state, invitation.agencyId);
+  const destination = getInvitationDestination(invitation);
+  if (!destination) {
+    return {
+      status: "invalid",
+      title: "Acces incomplet",
+      message: getAccessDestinationError(invitation),
+    };
+  }
+
   return {
     status: "valid",
     invitation,
     agencyName: agency?.name ?? "Signature Immobilier",
     email: invitation.email,
     description: getLocalInviteDescription(invitation, agency?.name),
+    roleLabel: getLocalInviteRoleLabel(invitation),
+    destination,
   };
 }
 
@@ -349,6 +378,12 @@ function getLocalInviteDescription(
   }
 
   return "Vous allez creer votre mot de passe pour acceder au suivi de votre bien.";
+}
+
+function getLocalInviteRoleLabel(invitation: V2AccessInvitation) {
+  if (invitation.role === "manager") return "Patron / manager";
+  if (invitation.role === "agent") return "Agent";
+  return "Vendeur";
 }
 
 function saveAcceptedAccessSession(access: V2UserAccess) {
