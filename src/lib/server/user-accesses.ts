@@ -216,16 +216,15 @@ export async function getActiveUserAccessForEmail(email: string) {
 export function getUserAccessDestination(access: UserAccessRecord) {
   if (access.role === "admin") return "/admin";
 
-  if (access.role === "manager" && access.agencySlug) {
-    return `/patron/${encodePathSegment(access.agencySlug)}`;
+  if (
+    (access.role === "manager" || access.role === "agent") &&
+    access.agencySlug
+  ) {
+    return `/agence/${encodePathSegment(access.agencySlug)}`;
   }
 
-  if (access.role === "agent" && access.agencySlug) {
-    return `/agent/${encodePathSegment(access.agencySlug)}`;
-  }
-
-  if (access.role === "seller" && access.sellerToken) {
-    return `/vendeur/${encodePathSegment(access.sellerToken)}`;
+  if (access.role === "seller" && access.agencySlug && access.sellerToken) {
+    return `/agence/${encodePathSegment(access.agencySlug)}/vendeur/${encodePathSegment(access.sellerToken)}`;
   }
 
   return "";

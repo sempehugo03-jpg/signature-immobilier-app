@@ -14,7 +14,6 @@ import {
   type Profile,
   type UserRole,
 } from "@/lib/supabase";
-import { signOutEverywhere } from "@/lib/session-cleanup";
 
 const OWNER_EMAIL = "sempehugo03@gmail.com";
 const PUBLIC_FALLBACK_ROLE: UserRole = "seller";
@@ -163,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await signOutEverywhere();
+    await supabase.auth.signOut();
     setSession(null);
     setProfile(null);
   }, []);
