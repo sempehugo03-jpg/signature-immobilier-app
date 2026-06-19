@@ -481,7 +481,13 @@ export function getInvitationDestination(invitation: V2AccessInvitation) {
     return invitation.sellerToken ? `/vendeur/${invitation.sellerToken}` : "";
   }
 
-  return invitation.agencySlug ? `/agence/${invitation.agencySlug}` : "";
+  if (!invitation.agencySlug) return "";
+
+  if (invitation.role === "manager") {
+    return `/patron/${invitation.agencySlug}`;
+  }
+
+  return `/agent/${invitation.agencySlug}`;
 }
 
 export function getAccessDestination(
@@ -502,7 +508,7 @@ export function getAccessDestinationError(
     (access.role === "manager" || access.role === "agent") &&
     !access.agencySlug
   ) {
-    return "Accès agence incomplet : agencySlug manquant.";
+    return "Accès incomplet : agencySlug manquant.";
   }
 
   return "Aucun espace n'est encore associe a ce compte. Verifiez l'invitation recue par email ou contactez l'agence.";
@@ -666,7 +672,9 @@ export function getUserAccessDestination(access: V2UserAccess) {
     (access.role === "manager" || access.role === "agent") &&
     access.agencySlug
   ) {
-    return `/agence/${access.agencySlug}`;
+    return access.role === "manager"
+      ? `/patron/${access.agencySlug}`
+      : `/agent/${access.agencySlug}`;
   }
   if (access.role === "seller" && access.sellerToken) {
     return `/vendeur/${access.sellerToken}`;
@@ -2067,7 +2075,11 @@ function createAccessInvitation({
     );
   }
   const destination =
-    role === "seller" ? `/vendeur/${sellerToken}` : `/agence/${agency.slug}`;
+    role === "seller"
+      ? `/vendeur/${sellerToken}`
+      : role === "manager"
+        ? `/patron/${agency.slug}`
+        : `/agent/${agency.slug}`;
   const invitation: V2AccessInvitation = {
     id: makeId("access_invite"),
     token,

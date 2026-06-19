@@ -857,6 +857,97 @@ export function AgencyDashboardPage({ agencySlug }: { agencySlug: string }) {
   );
 }
 
+export function PatronDashboardPage({ agencySlug }: { agencySlug: string }) {
+  const { state } = useV2Store();
+  const agency = getAgencyBySlug(state, agencySlug);
+
+  if (!agency) return <NotFound title="Agence introuvable" />;
+
+  const mismatch = getPrivateSpaceMismatch(
+    readLocalAccessSnapshot(state),
+    "manager",
+    agency.slug,
+  );
+
+  if (mismatch) {
+    return <RoleMismatchPanel title="Acces patron indisponible" text={mismatch} />;
+  }
+
+  return <AgencyDashboardPage agencySlug={agencySlug} />;
+}
+
+export function AgentDashboardPage({ agencySlug }: { agencySlug: string }) {
+  const { state } = useV2Store();
+  const agency = getAgencyBySlug(state, agencySlug);
+
+  if (!agency) return <NotFound title="Agence introuvable" />;
+
+  const mismatch = getPrivateSpaceMismatch(
+    readLocalAccessSnapshot(state),
+    "agent",
+    agency.slug,
+  );
+
+  if (mismatch) {
+    return <RoleMismatchPanel title="Acces agent indisponible" text={mismatch} />;
+  }
+
+  const properties = getAgencyProperties(state, agency.id);
+  const publishedCount = properties.filter((property) => property.isPublished).length;
+
+  return (
+    <AgentShell agency={agency}>
+      <Header
+        title="Espace agent"
+        text="Vue operationnelle limitee aux biens, visites, demandes et comptes rendus utiles a l'agent."
+      />
+
+      <div className="grid gap-4 md:grid-cols-3">
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Biens suivis</p>
+          <p className="mt-3 font-display text-4xl text-slate-950">{properties.length}</p>
+        </div>
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Annonces publiees</p>
+          <p className="mt-3 font-display text-4xl text-slate-950">{publishedCount}</p>
+        </div>
+        <div className="rounded-[28px] border border-slate-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Actions disponibles</p>
+          <p className="mt-3 text-sm font-semibold text-slate-950">
+            Gerer les biens, visites, comptes rendus et espaces vendeurs.
+          </p>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap gap-3">
+        <Link to="/agence/$slug/biens" params={{ slug: agency.slug }}>
+          Biens
+        </Link>
+        <Link to="/agence/$slug/demandes-visites" params={{ slug: agency.slug }}>
+          Demandes de visite
+        </Link>
+        <Link to="/agence/$slug/estimations" params={{ slug: agency.slug }}>
+          Estimations
+        </Link>
+      </div>
+
+      <section className="space-y-4">
+        <h2 className="font-display text-3xl text-slate-950">Biens a gerer</h2>
+        <div className="grid gap-4">
+          {properties.map((property) => (
+            <AgencyPropertyCard key={property.id} agencySlug={agencySlug} property={property} />
+          ))}
+          {properties.length === 0 ? (
+            <div className="rounded-[28px] border border-dashed border-slate-200 bg-white p-6 text-sm text-slate-500">
+              Aucun bien rattache pour le moment.
+            </div>
+          ) : null}
+        </div>
+      </section>
+    </AgentShell>
+  );
+}
+
 export function AgencyPropertiesPage({ agencySlug }: { agencySlug: string }) {
   const { state } = useV2Store();
   const agency = getAgencyBySlug(state, agencySlug);
@@ -1987,6 +2078,45 @@ function getInvitationRoleLabel(role: V2AccessInvitation["role"]) {
   return "Vendeur";
 }
 
+function getPrivateSpaceMismatch(
+  access: CurrentAccessSnapshot | null,
+  expectedRole: "manager" | "agent",
+  agencySlug: string,
+) {
+  if (!access?.role) return "";
+
+  if (access.role === "admin") return "";
+
+  if (access.role === "seller") {
+    return "Cet espace n'est pas associe a votre acces vendeur.";
+  }
+
+  if (access.agencySlug && access.agencySlug !== agencySlug) {
+    return "Cet espace n'est pas associe a votre agence.";
+  }
+
+  if (access.role !== expectedRole) {
+    return "Cet espace n'est pas associe a votre acces.";
+  }
+
+  return "";
+}
+
+function RoleMismatchPanel({ title, text }: { title: string; text: string }) {
+  return (
+    <div className="min-h-screen bg-[#f6f1e8] px-5 py-10">
+      <div className="mx-auto max-w-xl rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm">
+        <Badge variant="secondary">Acces separe</Badge>
+        <h1 className="mt-4 font-display text-3xl text-slate-950">{title}</h1>
+        <p className="mt-3 text-sm leading-6 text-slate-600">{text}</p>
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link to="/mon-suivi">Changer de compte</Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function RoleLimitedPanel({ title, text }: { title: string; text: string }) {
   return (
     <Section>
@@ -2062,13 +2192,13 @@ function DemoAccessPanel({
           </Link>
         </Button>
         <Button asChild variant="outline" className="rounded-full bg-white">
-          <Link to="/agence/$slug" params={{ slug: agency.slug }}>
+          <Link to="/patron/$agencySlug" params={{ agencySlug: agency.slug }}>
             Ouvrir l'espace patron / agence
           </Link>
         </Button>
         <Button asChild variant="outline" className="rounded-full bg-white">
-          <Link to="/agence/$slug" params={{ slug: agency.slug }}>
-            Espace agent (vue agence provisoire)
+          <Link to="/agent/$agencySlug" params={{ agencySlug: agency.slug }}>
+            Ouvrir l'espace agent
           </Link>
         </Button>
         {sellerToken ? (
@@ -2126,6 +2256,26 @@ function Shell({ agency, children }: { agency?: Agency; children: ReactNode }) {
   );
 }
 
+function AgentShell({ agency, children }: { agency: Agency; children: ReactNode }) {
+  const links = [
+    ["Dashboard", `/agent/${agency.slug}`],
+    ["Biens", `/agence/${agency.slug}/biens`],
+    ["Estimations", `/agence/${agency.slug}/estimations`],
+    ["Visites", `/agence/${agency.slug}/demandes-visites`],
+  ];
+
+  return (
+    <PrivateShell
+      title={`${agency.name} - Agent`}
+      subtitle="Espace agent operationnel"
+      useBrowserNavigation
+      links={links}
+    >
+      {children}
+    </PrivateShell>
+  );
+}
+
 function AgencyShell({ agency, children }: { agency: Agency; children: ReactNode }) {
   const role = useCurrentAgencyRole(agency.slug);
   if (role === "seller") {
@@ -2135,13 +2285,13 @@ function AgencyShell({ agency, children }: { agency: Agency; children: ReactNode
   const links =
     role === "agent"
       ? [
-          ["Dashboard", `/agence/${agency.slug}`],
+          ["Dashboard", `/agent/${agency.slug}`],
           ["Biens", `/agence/${agency.slug}/biens`],
           ["Estimations", `/agence/${agency.slug}/estimations`],
           ["Visites", `/agence/${agency.slug}/demandes-visites`],
         ]
       : [
-          ["Dashboard", `/agence/${agency.slug}`],
+          ["Dashboard", `/patron/${agency.slug}`],
           ["Biens", `/agence/${agency.slug}/biens`],
           ["Vendeurs", `/agence/${agency.slug}/vendeurs`],
           ["Estimations", `/agence/${agency.slug}/estimations`],
