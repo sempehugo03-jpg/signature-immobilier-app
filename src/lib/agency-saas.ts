@@ -722,6 +722,27 @@ export function saveAgencyProperty(
   );
 }
 
+export function deleteAgencyProperty(property: AgencyProperty) {
+  const properties = readStored<AgencyProperty[]>(PROPERTIES_KEY, []).map(
+    coerceProperty,
+  );
+  const nextProperties = properties.filter((item) => item.id !== property.id);
+  writeStored(PROPERTIES_KEY, nextProperties);
+
+  saveVisitRequests(
+    getVisitRequests().filter((request) => request.propertyId !== property.id),
+  );
+  saveAccessTokens(
+    getAccessTokens().filter(
+      (token) =>
+        token.propertyId !== property.id &&
+        (!property.sellerToken || token.sellerToken !== property.sellerToken),
+    ),
+  );
+
+  return nextProperties.filter((item) => item.agencyId === property.agencyId);
+}
+
 export function updateAgencyProperty(
   property: AgencyProperty,
   patch: Partial<AgencyProperty>,
