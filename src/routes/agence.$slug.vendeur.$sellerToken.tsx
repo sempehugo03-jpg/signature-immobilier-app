@@ -241,34 +241,15 @@ function AgencySellerRoute() {
                 )}
                 {visibleDocuments.map((document) =>
                   document.url ? (
-                    <div
+                    <a
                       key={document.id}
-                      className="rounded-[16px] bg-[#faf7f0] px-3 py-3 text-sm"
+                      href={document.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="block rounded-[16px] bg-[#faf7f0] px-3 py-2 text-sm font-medium transition hover:bg-[#f2eadc]"
                     >
-                      <div className="font-medium">{document.name}</div>
-                      {document.fileName && (
-                        <div className="mt-1 text-xs text-primary/45">
-                          {document.fileName}
-                        </div>
-                      )}
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        <a
-                          href={document.url}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="rounded-full border border-[#e8e0d5] bg-white px-3 py-1.5 text-xs font-medium transition hover:bg-[#f2eadc]"
-                        >
-                          Ouvrir
-                        </a>
-                        <a
-                          href={document.url}
-                          download={document.fileName || document.name}
-                          className="rounded-full border border-[#e8e0d5] bg-white px-3 py-1.5 text-xs font-medium transition hover:bg-[#f2eadc]"
-                        >
-                          Télécharger
-                        </a>
-                      </div>
-                    </div>
+                      {document.name}
+                    </a>
                   ) : (
                     <div
                       key={document.id}
