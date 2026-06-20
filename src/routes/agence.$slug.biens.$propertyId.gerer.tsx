@@ -40,7 +40,6 @@ import {
   addPropertyVisit,
   addVisitReport,
   deletePropertyDocument,
-  deleteAgencyProperty,
   deletePropertyPhoto,
   deletePropertyVisit,
   deleteVisitReport,
@@ -65,7 +64,6 @@ import {
   deletePropertyDocumentFile,
   deletePropertyPhotoFile,
   getPropertyUploadErrorMessage,
-  PropertyUploadError,
   uploadPropertyDocument,
   uploadPropertyPhoto,
 } from "@/lib/property-storage";
@@ -231,48 +229,27 @@ function AgencyPropertyDetailRoute() {
     setUploadingPhotos(true);
     setFeedback("Envoi des photos…");
     let nextProperty = property;
-    let addedRemote = 0;
-    let addedLocal = 0;
 
     try {
       for (const file of files) {
-        let uploaded;
-        let localFallback = false;
-
-        try {
-          uploaded = await uploadPropertyPhoto({
-            agencySlug: agency.slug,
-            propertyId: property.id,
-            file,
-          });
-          addedRemote += 1;
-        } catch (error) {
-          if (!shouldUseLocalFileFallback(error)) throw error;
-          console.info("Upload photo distant indisponible, fallback local", error);
-          uploaded = createLocalUploadedFile(file);
-          localFallback = true;
-          addedLocal += 1;
-        }
+        const uploaded = await uploadPropertyPhoto({
+          agencySlug: agency.slug,
+          propertyId: property.id,
+          file,
+        });
         nextProperty = addPropertyPhoto(nextProperty, {
           url: uploaded.url,
-          storagePath: localFallback ? "" : uploaded.path,
+          storagePath: uploaded.path,
           name: uploaded.name,
           size: uploaded.size,
           type: uploaded.type,
           alt: property.title,
-          isMain: !nextProperty.photos.some((photo) => photo.isMain),
+          isMain: !nextProperty.photos.some((photo) => photo.storagePath),
         });
       }
 
       setProperty(nextProperty);
       setFeedback(files.length > 1 ? "Photos ajoutées." : "Photo ajoutée.");
-      if (addedLocal > 0) {
-        setFeedback(
-          addedRemote > 0
-            ? "Photos ajoutees. Certaines ont ete ajoutees localement, stockage distant non configure."
-            : "Photos ajoutees localement, stockage distant non configure.",
-        );
-      }
     } catch (error) {
       console.info("Upload photo non finalisé", error);
       setProperty(nextProperty);
@@ -338,25 +315,16 @@ function AgencyPropertyDetailRoute() {
     setFeedback("Envoi du document…");
 
     try {
-      let localFallback = false;
-      let uploaded;
-      try {
-        uploaded = await uploadPropertyDocument({
-          agencySlug: agency.slug,
-          propertyId: property.id,
-          file,
-        });
-      } catch (error) {
-        if (!shouldUseLocalFileFallback(error)) throw error;
-        console.info("Upload document distant indisponible, fallback local", error);
-        uploaded = createLocalUploadedFile(file);
-        localFallback = true;
-      }
+      const uploaded = await uploadPropertyDocument({
+        agencySlug: agency.slug,
+        propertyId: property.id,
+        file,
+      });
       const nextProperty = addPropertyDocument(property, {
         name: documentForm.name.trim() || getFileDisplayName(uploaded.name),
         type: documentForm.type,
         documentType: documentForm.type,
-        storagePath: localFallback ? "" : uploaded.path,
+        storagePath: uploaded.path,
         url: uploaded.url,
         fileName: uploaded.name,
         size: uploaded.size,
@@ -370,9 +338,6 @@ function AgencyPropertyDetailRoute() {
         visibleToSeller: true,
       });
       setFeedback("Document ajouté.");
-      if (localFallback) {
-        setFeedback("Document ajouté localement, stockage distant non configuré.");
-      }
     } catch (error) {
       console.info("Upload document non finalisé", error);
       setFeedback(getPropertyUploadErrorMessage(error, "document"));
@@ -389,26 +354,6 @@ function AgencyPropertyDetailRoute() {
     setProperty(deletePropertyDocument(property, documentId));
     setFeedback("Document supprimé.");
     await deletePropertyDocumentFile(document?.storagePath);
-  }
-
-  async function onDeleteProperty() {
-    if (!agency || !property) return;
-    const confirmed = window.confirm(
-      "Supprimer cette annonce ? Les photos, documents, visites, comptes rendus et l'espace vendeur lie seront retires.",
-    );
-    if (!confirmed) return;
-
-    setSaving(true);
-    await Promise.allSettled([
-      ...property.photos.map((photo) =>
-        deletePropertyPhotoFile(photo.storagePath),
-      ),
-      ...property.propertyDocuments.map((document) =>
-        deletePropertyDocumentFile(document.storagePath),
-      ),
-    ]);
-    deleteAgencyProperty(property);
-    window.location.assign(`/agence/${encodeURIComponent(agency.slug)}/biens`);
   }
 
   async function onCreateSellerSpace(event?: FormEvent<HTMLFormElement>) {
@@ -706,7 +651,7 @@ function AgencyPropertyDetailRoute() {
                   className="min-h-28"
                 />
               </Field>
-              <div className="flex flex-wrap gap-3 md:col-span-2">
+              <div className="md:col-span-2">
                 <Button
                   className="rounded-full"
                   size="lg"
@@ -716,17 +661,6 @@ function AgencyPropertyDetailRoute() {
                   {saving
                     ? "Enregistrement..."
                     : "Enregistrer les informations"}
-                </Button>
-                <Button
-                  type="button"
-                  variant="outline"
-                  className="rounded-full border-red-200 bg-white text-red-600 hover:bg-red-50"
-                  size="lg"
-                  disabled={!canEdit || saving}
-                  onClick={onDeleteProperty}
-                >
-                  <Trash2 className="h-4 w-4" />
-                  Supprimer l'annonce
                 </Button>
               </div>
             </form>
@@ -1400,27 +1334,6 @@ function LogoutLink() {
       </Link>
     </Button>
   );
-}
-
-function createLocalUploadedFile(file: File) {
-  return {
-    url: URL.createObjectURL(file),
-    path: "",
-    name: file.name,
-    size: file.size,
-    type: file.type,
-  };
-}
-
-function shouldUseLocalFileFallback(error: unknown) {
-  if (error instanceof PropertyUploadError) {
-    return (
-      error.code === "supabase_not_configured" ||
-      error.code === "upload_failed"
-    );
-  }
-
-  return true;
 }
 
 function getFileDisplayName(fileName: string) {
