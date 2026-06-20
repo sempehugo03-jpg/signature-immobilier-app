@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useState } from "react";
 import { ArrowRight, KeyRound } from "lucide-react";
 
 import { SiteLayout } from "@/components/site-layout";
@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useAuth } from "@/hooks/use-auth";
 import { isAdminCodeValid, saveAdminSession } from "@/lib/admin-session";
+import { signOutEverywhere } from "@/lib/session-cleanup";
 import { supabase } from "@/lib/supabase";
 
 type CurrentAccessResult =
@@ -58,36 +59,14 @@ function MonSuiviPage() {
   const [showAdminAccess, setShowAdminAccess] = useState(false);
   const [adminCode, setAdminCode] = useState("");
   const [adminError, setAdminError] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (loading || !session?.access_token) return;
-
-    let active = true;
-    setResolvingSession(true);
-    resolveCurrentAccess(session.access_token)
-      .then((result) => {
-        if (!active) return;
-
-        if (result.ok) {
-          window.location.replace(result.destination);
-          return;
-        }
-
-        setError(result.message);
-      })
-      .finally(() => {
-        if (active) setResolvingSession(false);
-      });
-
-    return () => {
-      active = false;
-    };
-  }, [loading, session?.access_token]);
+  const sessionEmail = session?.user?.email ?? "";
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setSubmitting(true);
     setError(null);
+
+    await signOutEverywhere();
 
     const { data, error: signInError } = await supabase.auth.signInWithPassword(
       {
@@ -121,6 +100,32 @@ function MonSuiviPage() {
     }
 
     window.location.assign(accessResult.destination);
+  }
+
+  async function onContinueSession() {
+    if (!session?.access_token) return;
+    setResolvingSession(true);
+    setError(null);
+
+    const accessResult = await resolveCurrentAccess(session.access_token);
+    setResolvingSession(false);
+
+    if (!accessResult.ok) {
+      setError(accessResult.message);
+      return;
+    }
+
+    window.location.assign(accessResult.destination);
+  }
+
+  async function onChangeAccount() {
+    setResolvingSession(true);
+    await signOutEverywhere();
+    setEmail("");
+    setPassword("");
+    setError(null);
+    setAdminError(null);
+    setResolvingSession(false);
   }
 
   function onAdminSubmit(event: FormEvent<HTMLFormElement>) {
@@ -167,6 +172,65 @@ function MonSuiviPage() {
               </CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="mb-5 rounded-xl border border-border/70 bg-secondary/25 p-4">
+                <div className="text-sm font-medium">Choisir un accès</div>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                  Connectez-vous avec votre email pour accéder à votre espace
+                  patron, agent ou vendeur. L’accès administrateur reste
+                  disponible plus bas.
+                </p>
+                <div className="mt-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                  <span className="rounded-full bg-background px-3 py-1">
+                    Accès patron
+                  </span>
+                  <span className="rounded-full bg-background px-3 py-1">
+                    Accès agent
+                  </span>
+                  <span className="rounded-full bg-background px-3 py-1">
+                    Accès vendeur
+                  </span>
+                  <span className="rounded-full bg-background px-3 py-1">
+                    Accès administrateur
+                  </span>
+                </div>
+              </div>
+
+              {!loading && session?.access_token && (
+                <Alert className="mb-5">
+                  <AlertDescription>
+                    <div className="space-y-3">
+                      <p>
+                        Vous êtes déjà connecté
+                        {sessionEmail ? ` avec ${sessionEmail}` : ""}.
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          className="rounded-full"
+                          disabled={resolvingSession}
+                          onClick={onContinueSession}
+                        >
+                          {resolvingSession
+                            ? "Ouverture..."
+                            : "Continuer vers mon espace"}
+                        </Button>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="rounded-full"
+                          disabled={resolvingSession}
+                          onClick={onChangeAccount}
+                        >
+                          Changer de compte
+                        </Button>
+                      </div>
+                    </div>
+                  </AlertDescription>
+                </Alert>
+              )}
+
               <form className="space-y-4" onSubmit={onSubmit}>
                 {error && (
                   <Alert variant="destructive">
@@ -201,7 +265,7 @@ function MonSuiviPage() {
                 <Button
                   className="w-full rounded-full"
                   size="lg"
-                  disabled={submitting || resolvingSession}
+                  disabled={submitting || resolvingSession || loading}
                 >
                   {submitting || resolvingSession
                     ? "Connexion..."

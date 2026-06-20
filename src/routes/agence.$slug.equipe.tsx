@@ -15,6 +15,7 @@ import {
   getCurrentAgencyAccess,
   type Agency,
 } from "@/lib/agency-saas";
+import { signOutToMonSuivi } from "@/lib/session-cleanup";
 
 export const Route = createFileRoute("/agence/$slug/equipe")({
   head: () => ({
@@ -116,7 +117,13 @@ function LogoutLink() {
       variant="outline"
       className="rounded-full border-[#d8cfc2] bg-white"
     >
-      <Link to="/">
+      <Link
+        to="/mon-suivi"
+        onClick={(event) => {
+          event.preventDefault();
+          void signOutToMonSuivi();
+        }}
+      >
         <LogOut className="h-4 w-4" />
         Déconnexion
       </Link>
