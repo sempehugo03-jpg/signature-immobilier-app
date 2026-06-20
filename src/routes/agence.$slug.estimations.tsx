@@ -19,7 +19,6 @@ import {
   type AgencyLead,
   type AgencyLeadStatus,
 } from "@/lib/agency-saas";
-import { signOutToMonSuivi } from "@/lib/session-cleanup";
 
 export const Route = createFileRoute("/agence/$slug/estimations")({
   head: () => ({
@@ -204,13 +203,7 @@ function LogoutLink() {
       variant="outline"
       className="rounded-full border-[#d8cfc2] bg-white"
     >
-      <Link
-        to="/mon-suivi"
-        onClick={(event) => {
-          event.preventDefault();
-          void signOutToMonSuivi();
-        }}
-      >
+      <Link to="/">
         <LogOut className="h-4 w-4" />
         Déconnexion
       </Link>

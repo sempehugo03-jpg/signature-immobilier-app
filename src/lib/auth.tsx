@@ -14,7 +14,6 @@ import {
   type Profile,
   type UserRole,
 } from "@/lib/supabase";
-import { clearLocalAccessSessions } from "@/lib/session-cleanup";
 
 const OWNER_EMAIL = "sempehugo03@gmail.com";
 const PUBLIC_FALLBACK_ROLE: UserRole = "seller";
@@ -163,13 +162,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    try {
-      await supabase.auth.signOut();
-    } finally {
-      clearLocalAccessSessions();
-      setSession(null);
-      setProfile(null);
-    }
+    await supabase.auth.signOut();
+    setSession(null);
+    setProfile(null);
   }, []);
 
   const value = useMemo<AuthContextValue>(
