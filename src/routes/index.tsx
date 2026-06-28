@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { AppInstallToast } from "@/components/AppInstallToast";
 import { PropertyCard } from "@/components/property-card";
 import { PropertyDetails } from "@/components/property-details";
 import { SiteLayout } from "@/components/site-layout";
@@ -97,6 +98,7 @@ function Page() {
   }, []);
   return (
     <SiteLayout variant="public">
+      <AppInstallToast />
       <section className="relative overflow-hidden">
         <div className="absolute inset-x-0 top-0 h-40 bg-secondary/60" />
         <div className="relative mx-auto grid max-w-7xl gap-10 px-5 pb-16 pt-10 md:px-8 md:pb-24 md:pt-16 lg:grid-cols-[0.86fr_1.14fr] lg:items-center">
