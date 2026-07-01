@@ -28,11 +28,13 @@ import { Route as ActivationPatronRouteImport } from './routes/activation-patron
 import { Route as ActivationAgentRouteImport } from './routes/activation-agent'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AgenceIndexRouteImport } from './routes/agence.index'
+import { Route as DemoTemplateImmobilierRouteImport } from './routes/demo.template-immobilier'
 import { Route as DemoAgenceSlugRouteImport } from './routes/demo-agence.$slug'
 import { Route as CreerAccesTokenRouteImport } from './routes/creer-acces.$token'
 import { Route as BiensPropertyIdRouteImport } from './routes/biens.$propertyId'
 import { Route as AgenceCompteRenduRouteImport } from './routes/agence.compte-rendu'
 import { Route as AgenceSlugRouteImport } from './routes/agence.$slug'
+import { Route as DemoTemplateImmobilierSpaceRouteImport } from './routes/demo.template-immobilier.$space'
 import { Route as DemoAgenceSlugVendeurRouteImport } from './routes/demo-agence.$slug.vendeur'
 import { Route as DemoAgenceSlugPatronRouteImport } from './routes/demo-agence.$slug.patron'
 import { Route as DemoAgenceSlugEstimationRouteImport } from './routes/demo-agence.$slug.estimation'
@@ -148,6 +150,11 @@ const AgenceIndexRoute = AgenceIndexRouteImport.update({
   path: '/agence/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoTemplateImmobilierRoute = DemoTemplateImmobilierRouteImport.update({
+  id: '/template-immobilier',
+  path: '/template-immobilier',
+  getParentRoute: () => DemoRoute,
+} as any)
 const DemoAgenceSlugRoute = DemoAgenceSlugRouteImport.update({
   id: '/demo-agence/$slug',
   path: '/demo-agence/$slug',
@@ -173,6 +180,12 @@ const AgenceSlugRoute = AgenceSlugRouteImport.update({
   path: '/agence/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DemoTemplateImmobilierSpaceRoute =
+  DemoTemplateImmobilierSpaceRouteImport.update({
+    id: '/$space',
+    path: '/$space',
+    getParentRoute: () => DemoTemplateImmobilierRoute,
+  } as any)
 const DemoAgenceSlugVendeurRoute = DemoAgenceSlugVendeurRouteImport.update({
   id: '/vendeur',
   path: '/vendeur',
@@ -283,7 +296,7 @@ export interface FileRoutesByFullPath {
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
-  '/demo': typeof DemoRoute
+  '/demo': typeof DemoRouteWithChildren
   '/diagnostic': typeof DiagnosticRoute
   '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
@@ -298,6 +311,7 @@ export interface FileRoutesByFullPath {
   '/biens/$propertyId': typeof BiensPropertyIdRoute
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
+  '/demo/template-immobilier': typeof DemoTemplateImmobilierRouteWithChildren
   '/agence/': typeof AgenceIndexRoute
   '/acces/agence/$token': typeof AccesAgenceTokenRoute
   '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
@@ -315,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
   '/demo-agence/$slug/vendeur': typeof DemoAgenceSlugVendeurRoute
+  '/demo/template-immobilier/$space': typeof DemoTemplateImmobilierSpaceRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
@@ -328,7 +343,7 @@ export interface FileRoutesByTo {
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
-  '/demo': typeof DemoRoute
+  '/demo': typeof DemoRouteWithChildren
   '/diagnostic': typeof DiagnosticRoute
   '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
@@ -343,6 +358,7 @@ export interface FileRoutesByTo {
   '/biens/$propertyId': typeof BiensPropertyIdRoute
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
+  '/demo/template-immobilier': typeof DemoTemplateImmobilierRouteWithChildren
   '/agence': typeof AgenceIndexRoute
   '/acces/agence/$token': typeof AccesAgenceTokenRoute
   '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
@@ -360,6 +376,7 @@ export interface FileRoutesByTo {
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
   '/demo-agence/$slug/vendeur': typeof DemoAgenceSlugVendeurRoute
+  '/demo/template-immobilier/$space': typeof DemoTemplateImmobilierSpaceRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
@@ -374,7 +391,7 @@ export interface FileRoutesById {
   '/admin-agence': typeof AdminAgenceRoute
   '/agent': typeof AgentRouteWithChildren
   '/agent-dashboard': typeof AgentDashboardRoute
-  '/demo': typeof DemoRoute
+  '/demo': typeof DemoRouteWithChildren
   '/diagnostic': typeof DiagnosticRoute
   '/espace-signature': typeof EspaceSignatureRoute
   '/espace-vendeur': typeof EspaceVendeurRoute
@@ -389,6 +406,7 @@ export interface FileRoutesById {
   '/biens/$propertyId': typeof BiensPropertyIdRoute
   '/creer-acces/$token': typeof CreerAccesTokenRoute
   '/demo-agence/$slug': typeof DemoAgenceSlugRouteWithChildren
+  '/demo/template-immobilier': typeof DemoTemplateImmobilierRouteWithChildren
   '/agence/': typeof AgenceIndexRoute
   '/acces/agence/$token': typeof AccesAgenceTokenRoute
   '/admin/agencies/$slug': typeof AdminAgenciesSlugRoute
@@ -406,6 +424,7 @@ export interface FileRoutesById {
   '/demo-agence/$slug/estimation': typeof DemoAgenceSlugEstimationRoute
   '/demo-agence/$slug/patron': typeof DemoAgenceSlugPatronRoute
   '/demo-agence/$slug/vendeur': typeof DemoAgenceSlugVendeurRoute
+  '/demo/template-immobilier/$space': typeof DemoTemplateImmobilierSpaceRoute
   '/agence/$slug/vendeur/$sellerToken': typeof AgenceSlugVendeurSellerTokenRoute
   '/agence/$slug/biens/$propertyId/gerer': typeof AgenceSlugBiensPropertyIdGererRoute
   '/demo-agence/$slug/biens/$propertyId/gerer': typeof DemoAgenceSlugBiensPropertyIdGererRoute
@@ -436,6 +455,7 @@ export interface FileRouteTypes {
     | '/biens/$propertyId'
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
+    | '/demo/template-immobilier'
     | '/agence/'
     | '/acces/agence/$token'
     | '/admin/agencies/$slug'
@@ -453,6 +473,7 @@ export interface FileRouteTypes {
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
     | '/demo-agence/$slug/vendeur'
+    | '/demo/template-immobilier/$space'
     | '/agence/$slug/vendeur/$sellerToken'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
@@ -481,6 +502,7 @@ export interface FileRouteTypes {
     | '/biens/$propertyId'
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
+    | '/demo/template-immobilier'
     | '/agence'
     | '/acces/agence/$token'
     | '/admin/agencies/$slug'
@@ -498,6 +520,7 @@ export interface FileRouteTypes {
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
     | '/demo-agence/$slug/vendeur'
+    | '/demo/template-immobilier/$space'
     | '/agence/$slug/vendeur/$sellerToken'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
@@ -526,6 +549,7 @@ export interface FileRouteTypes {
     | '/biens/$propertyId'
     | '/creer-acces/$token'
     | '/demo-agence/$slug'
+    | '/demo/template-immobilier'
     | '/agence/'
     | '/acces/agence/$token'
     | '/admin/agencies/$slug'
@@ -543,6 +567,7 @@ export interface FileRouteTypes {
     | '/demo-agence/$slug/estimation'
     | '/demo-agence/$slug/patron'
     | '/demo-agence/$slug/vendeur'
+    | '/demo/template-immobilier/$space'
     | '/agence/$slug/vendeur/$sellerToken'
     | '/agence/$slug/biens/$propertyId/gerer'
     | '/demo-agence/$slug/biens/$propertyId/gerer'
@@ -557,7 +582,7 @@ export interface RootRouteChildren {
   AdminAgenceRoute: typeof AdminAgenceRoute
   AgentRoute: typeof AgentRouteWithChildren
   AgentDashboardRoute: typeof AgentDashboardRoute
-  DemoRoute: typeof DemoRoute
+  DemoRoute: typeof DemoRouteWithChildren
   DiagnosticRoute: typeof DiagnosticRoute
   EspaceSignatureRoute: typeof EspaceSignatureRoute
   EspaceVendeurRoute: typeof EspaceVendeurRoute
@@ -715,6 +740,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgenceIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/demo/template-immobilier': {
+      id: '/demo/template-immobilier'
+      path: '/template-immobilier'
+      fullPath: '/demo/template-immobilier'
+      preLoaderRoute: typeof DemoTemplateImmobilierRouteImport
+      parentRoute: typeof DemoRoute
+    }
     '/demo-agence/$slug': {
       id: '/demo-agence/$slug'
       path: '/demo-agence/$slug'
@@ -749,6 +781,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/agence/$slug'
       preLoaderRoute: typeof AgenceSlugRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/demo/template-immobilier/$space': {
+      id: '/demo/template-immobilier/$space'
+      path: '/$space'
+      fullPath: '/demo/template-immobilier/$space'
+      preLoaderRoute: typeof DemoTemplateImmobilierSpaceRouteImport
+      parentRoute: typeof DemoTemplateImmobilierRoute
     }
     '/demo-agence/$slug/vendeur': {
       id: '/demo-agence/$slug/vendeur'
@@ -906,6 +945,30 @@ const AgentRouteChildren: AgentRouteChildren = {
 
 const AgentRouteWithChildren = AgentRoute._addFileChildren(AgentRouteChildren)
 
+interface DemoTemplateImmobilierRouteChildren {
+  DemoTemplateImmobilierSpaceRoute: typeof DemoTemplateImmobilierSpaceRoute
+}
+
+const DemoTemplateImmobilierRouteChildren: DemoTemplateImmobilierRouteChildren =
+  {
+    DemoTemplateImmobilierSpaceRoute: DemoTemplateImmobilierSpaceRoute,
+  }
+
+const DemoTemplateImmobilierRouteWithChildren =
+  DemoTemplateImmobilierRoute._addFileChildren(
+    DemoTemplateImmobilierRouteChildren,
+  )
+
+interface DemoRouteChildren {
+  DemoTemplateImmobilierRoute: typeof DemoTemplateImmobilierRouteWithChildren
+}
+
+const DemoRouteChildren: DemoRouteChildren = {
+  DemoTemplateImmobilierRoute: DemoTemplateImmobilierRouteWithChildren,
+}
+
+const DemoRouteWithChildren = DemoRoute._addFileChildren(DemoRouteChildren)
+
 interface AgenceSlugRouteChildren {
   AgenceSlugDemandesVisitesRoute: typeof AgenceSlugDemandesVisitesRoute
   AgenceSlugEquipeRoute: typeof AgenceSlugEquipeRoute
@@ -960,7 +1023,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminAgenceRoute: AdminAgenceRoute,
   AgentRoute: AgentRouteWithChildren,
   AgentDashboardRoute: AgentDashboardRoute,
-  DemoRoute: DemoRoute,
+  DemoRoute: DemoRouteWithChildren,
   DiagnosticRoute: DiagnosticRoute,
   EspaceSignatureRoute: EspaceSignatureRoute,
   EspaceVendeurRoute: EspaceVendeurRoute,

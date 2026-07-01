@@ -10,6 +10,8 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -34,6 +36,11 @@
   --color-gold-foreground: var(--gold-foreground);
   --color-ink: var(--ink);
   --color-sand: var(--sand);
+  --color-brand-black: var(--brand-black);
+  --color-brand-gray: var(--brand-gray);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-line: var(--brand-line);
+  --color-success: var(--success);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);
@@ -49,6 +56,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   --font-display: "Cormorant Garamond", "Times New Roman", serif;
   --font-sans: "Inter", system-ui, sans-serif;
+  --font-serif: "Playfair Display", "Cormorant Garamond", ui-serif, Georgia, serif;
 }
 
 :root {
@@ -77,6 +85,11 @@
   --gold-foreground: oklch(0.2 0.02 250);
   --ink: oklch(0.22 0.04 250);
   --sand: oklch(0.93 0.025 80);
+  --brand-black: oklch(0.16 0.005 285);
+  --brand-gray: oklch(0.55 0.008 285);
+  --brand-surface: oklch(0.974 0.003 285);
+  --brand-line: oklch(0.92 0.004 285);
+  --success: oklch(0.66 0.14 155);
   --chart-1: oklch(0.22 0.04 250);
   --chart-2: oklch(0.74 0.11 80);
   --chart-3: oklch(0.55 0.05 250);
@@ -116,6 +129,11 @@
   --gold-foreground: oklch(0.15 0.02 250);
   --ink: oklch(0.15 0.02 250);
   --sand: oklch(0.25 0.03 250);
+  --brand-black: oklch(0.16 0.005 285);
+  --brand-gray: oklch(0.55 0.008 285);
+  --brand-surface: oklch(0.974 0.003 285);
+  --brand-line: oklch(0.92 0.004 285);
+  --success: oklch(0.66 0.14 155);
   --chart-1: oklch(0.98 0.005 80);
   --chart-2: oklch(0.78 0.12 80);
   --chart-3: oklch(0.6 0.05 250);
@@ -154,4 +172,8 @@
 @utility gold-rule {
   background: linear-gradient(90deg, transparent, var(--color-gold), transparent);
   height: 1px;
+}
+
+@utility font-serif {
+  font-family: var(--font-serif);
 }
